@@ -85,7 +85,7 @@ object TunnelController {
         val b = backend ?: return null
         val stats = b.getStatistics(t)
         val key = stats.peers().firstOrNull() ?: return null
-        val ms = stats.peer(key)?.latestHandshake ?: 0L
+        val ms = stats.peer(key)?.latestHandshakeEpochMillis ?: 0L
         return if (ms > 0) ms else null
     }
 
@@ -94,7 +94,7 @@ object TunnelController {
         val stats = backend?.getStatistics(t) ?: return null
         val key = stats.peers().firstOrNull() ?: return null
         val st = stats.peer(key) ?: return null
-        return (st.rx to st.tx)
+        return (st.rxBytes to st.txBytes)
     }
 
     fun isUp(): Boolean = activeTunnel != null
