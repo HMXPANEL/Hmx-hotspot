@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
 import hmx.ui.screens.activity.ActivityScreen
 import hmx.ui.screens.devices.DevicesScreen
 import hmx.ui.screens.error.ErrorRouteScreen
