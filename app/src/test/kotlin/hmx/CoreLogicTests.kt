@@ -22,15 +22,18 @@ class PairingCodeTest {
 
     @Test
     fun `normalize handles confusables and separators`() {
-        assertEquals("0112345Z", PairingCode.normalize("oIl 234-5z"))
-        assertTrue(PairingCode.isValid(PairingCode.normalize("abcd2345")))
+        assertEquals("HMX0112345Z", PairingCode.normalize("hmxoIl 234-5z"))
+        assertTrue(PairingCode.isValid(PairingCode.generate()))
     }
 
     @Test
     fun `invalid lengths rejected`() {
         assertFalse(PairingCode.isValid("ABC"))
-        assertFalse(PairingCode.isValid("ABCDEFGHJ"))
-        assertFalse(PairingCode.isValid("ABCDEFGL")) // L mapped to 1 -> ABCDEFG1 length ok? no: still 8 after map
+        assertFalse(PairingCode.isValid("HMX-1234")) // raw form never contains '-'
+        assertFalse(PairingCode.isValid("ABCDEF")) // wrong prefix
+        assertFalse(PairingCode.isValid("HMXA7K2")) // too long
+        assertTrue(PairingCode.isValid("HMXA7K"))
+        assertEquals("HMX-A7K", PairingCode.format("HMXA7K"))
     }
 
     @Test
