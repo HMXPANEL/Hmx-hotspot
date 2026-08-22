@@ -54,8 +54,8 @@ class SettingsRepository(private val context: Context) {
         if (role == null) prefs.remove(Keys.DESIRED_ROLE) else prefs[Keys.DESIRED_ROLE] = role
     }
 
-    suspend fun loadManualEndpoint(): String? = context.hmxDataStore.data.map { it[MANUAL_ENDPOINT] }
-        .let { flow -> kotlinx.coroutines.flow.first(flow) }
+    suspend fun loadManualEndpoint(): String? =
+        context.hmxDataStore.data.map { prefs -> prefs[MANUAL_ENDPOINT] }.first()
 
     suspend fun setManualEndpoint(value: String?) {
         context.hmxDataStore.edit { prefs ->

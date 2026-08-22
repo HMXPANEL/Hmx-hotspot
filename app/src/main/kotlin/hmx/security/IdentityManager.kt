@@ -55,14 +55,14 @@ class IdentityManager(private val context: Context, private val client: ControlC
             .encodeToString(kp.pubHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray())
         val name = nameOverride ?: "HMX ${android.os.Build.MODEL}".take(40)
 
-        val deviceId = client.register(name, pubkeyB64, secret)
+        val deviceId = client.register(name, pubB64, secret)
         vault.put("device_id", deviceId.encodeToByteArray())
         vault.put("device_secret", secret.encodeToByteArray())
         vault.put("wg_private_key_hex", privHex.encodeToByteArray())
         vault.put("wg_public_key_b64", pubB64.encodeToByteArray())
         vault.put("device_name", name.encodeToByteArray())
 
-        val id = Identity(deviceId, name, privHex, pubkeyB64, secret)
+        val id = Identity(deviceId, name, privHex, pubB64, secret)
         client.credentialsProvider = { id.deviceId to id.secret }
         _identity.value = id
         id
