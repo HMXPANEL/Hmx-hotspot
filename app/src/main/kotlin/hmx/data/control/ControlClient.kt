@@ -79,7 +79,7 @@ class ControlClient {
         }
     }
 
-    suspend fun rpc(fnName: String, args: Map<String, String>): JsonObject {
+    suspend fun rpc(fnName: String, args: Map<String, Any>): JsonObject {
         return withContext(Dispatchers.IO) {
             var res = exec("POST", "rest/v1/rpc/$fnName", jsonArgs(args), bearer = ensureToken())
             if (res.first == 401) {
@@ -88,12 +88,13 @@ class ControlClient {
             }
             val code = res.first
             val text = res.second
+            HmxLog.i("RPC") { "$fnName -> $code" }
             if (code >= 400) throw mapHttpError(code, text)
             json.parseToJsonElement(text).jsonObject
         }
     }
 
-    suspend fun rpcArray(fnName: String, args: Map<String, String> = emptyMap()): List<JsonObject> {
+    suspend fun rpcArray(fnName: String, args: Map<String, Any> = emptyMap()): List<JsonObject> {
         return withContext(Dispatchers.IO) {
             var res = exec("POST", "rest/v1/rpc/$fnName", jsonArgs(args), bearer = ensureToken())
             if (res.first == 401) {
@@ -102,13 +103,21 @@ class ControlClient {
             }
             val code = res.first
             val text = res.second
+            HmxLog.i("RPC") { "$fnName -> $code" }
             if (code >= 400) throw mapHttpError(code, text)
             json.parseToJsonElement(text.ifEmpty { "[]" }).jsonArray.mapNotNull { it as? JsonObject }
         }
     }
 
-    private fun jsonArgs(args: Map<String, String>): String =
-        args.entries.joinToString(",", "{", "}") { (k, v) -> "\"$k\":${jStr(v)}" }
+    private fun jsonArgs(args: Map<String, Any>): String =
+        args.entries.joinToString(",", "{", "}") { (k, v) ->
+            "\"$k\":" + when (v) {
+                is Int -> v.toString()
+                is Long -> v.toString()
+                is Boolean -> v.toString()
+                else -> jStr(v.toString())
+            }
+        }
 
     private fun jStr(s: String): String {
         val escaped = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
@@ -129,6 +138,7 @@ class ControlClient {
             .build()
         http.newCall(req).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
+            HmxLog.d("HTTP") { "$method $relPath -> ${resp.code}" }
             return resp.code to text
         }
     }

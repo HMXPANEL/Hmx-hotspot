@@ -149,6 +149,7 @@ fun HmxApp() {
                         }
                     },
                     onCancel = { navController.popBackStack() },
+                    onError = { key -> navTo(navController, Routes.error(key)) },
                 )
             }
             composable(Routes.SHARING) {

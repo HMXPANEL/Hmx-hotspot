@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.util.UUID
 
 class RealEngine(
@@ -66,7 +67,13 @@ class RealEngine(
 
     fun startSharing() {
         scope.launch {
-            try { identityManager.ensure() } catch (e: Exception) { provider.fail(mapRpcError(e)); return@launch }
+            try {
+                withTimeout(45_000) { identityManager.ensure() }
+            } catch (e: Exception) {
+                HmxLog.e("Share", e) { "identity/init failed" }
+                provider.fail(if (e is kotlinx.coroutines.TimeoutCancellationException) AppError.TIMEOUT else mapRpcError(e))
+                return@launch
+            }
             thisDeviceName = identityManager.identity.value?.name ?: thisDeviceName
             provider.prepare()
             val code = newPairingCode()
@@ -108,8 +115,10 @@ class RealEngine(
         val reqId = pendingRequestId ?: return
         scope.launch {
             try {
-                val res = controlClient.rpc("hmx_respond_request",
-                    mapOf("p_request_id" to reqId, "p_approve" to "true"))
+                val res = withTimeout(30_000) {
+                    controlClient.rpc("hmx_respond_request",
+                        mapOf("p_request_id" to reqId, "p_approve" to true))
+                }
                 if (res.str("status") != "approved") { provider.rejectPeer(); return@launch }
                 val octet = res.str("net_octet")
                 val peerId = res.str("peer_id")!!
