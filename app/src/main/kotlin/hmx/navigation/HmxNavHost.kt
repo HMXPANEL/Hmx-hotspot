@@ -131,7 +131,6 @@ fun HmxApp() {
                 HomeScreen(
                     openProvider = { navTo(navController, Routes.PROVIDER_DASHBOARD) },
                     openUser = { navTo(navController, Routes.USE_DASHBOARD) },
-                    onError = { key -> navTo(navController, Routes.error(key)) },
                 )
             }
 

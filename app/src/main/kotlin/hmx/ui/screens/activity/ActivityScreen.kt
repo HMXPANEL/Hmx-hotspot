@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ import hmx.ui.components.StatRow
 fun ActivityScreen() {
     val engine = rememberEngine()
     val sessions by engine.sessions.collectAsState()
+    LaunchedEffect(Unit) { engine.refreshLists() }
 
     val active = sessions.firstOrNull { it.isActive }
     val past = sessions.filter { !it.isActive }

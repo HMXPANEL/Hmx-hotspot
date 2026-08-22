@@ -1,11 +1,13 @@
 package hmx.di
 
 import android.content.Context
+import android.content.Intent
+import hmx.control.RealEngine
+import hmx.data.control.ControlClient
 import hmx.data.local.SettingsRepository
-import hmx.mock.MockHmxEngine
+import hmx.security.IdentityManager
 import hmx.security.KeystoreVault
 import hmx.security.MemoryVault
-import hmx.security.SecretVault
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,8 +18,26 @@ class AppContainer(context: Context) {
 
     val settingsRepository = SettingsRepository(context)
 
-    val vault: SecretVault = runCatching { KeystoreVault(context) }
-        .getOrElse { MemoryVault() }
+    private val vault = runCatching { KeystoreVault(context) }.getOrElse { MemoryVault() }
 
-    val engine = MockHmxEngine(appScope)
+    val controlClient = ControlClient()
+
+    val identityManager = IdentityManager(context, controlClient)
+
+    val engine = RealEngine(
+        scope = appScope,
+        identityManager = identityManager,
+        client = controlClient,
+        manualEndpoint = {
+            runCatching {
+                androidx.datastore.preferences.core.edit
+                ""
+            }.getOrDefault("")
+        },
+    )
+
+    fun initEngine(context: Context) {
+        engine.contextProvider = { context.applicationContext }
+        hmx.vpn.TunnelController.init(context)
+    }
 }

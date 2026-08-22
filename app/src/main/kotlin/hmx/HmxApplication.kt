@@ -13,6 +13,7 @@ class HmxApplication : Application() {
         super.onCreate()
         HmxLog.verbose = false
         container = AppContainer(this)
+        container.initEngine(this)
         HmxLog.i("App") { "HMX started" }
     }
 }

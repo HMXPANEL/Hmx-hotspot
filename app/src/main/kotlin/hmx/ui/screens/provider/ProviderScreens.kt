@@ -139,9 +139,6 @@ fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 SecondaryButton("New code", { engine.regenerateCode() })
-                // Mock affordance: pretend a nearby device scans this QR.
-                Spacer(Modifier.height(6.dp))
-                SecondaryButton("[mock] peer scans QR", { engine.simulateIncomingPairing("Pixel 8", "9F3CA21B") })
             }
             is ProviderState.PeerAuthenticating -> {
                 Spacer(Modifier.height(26.dp))
@@ -197,7 +194,7 @@ fun SharingActiveScreen(onStopped: () -> Unit, onDeviceClick: (String) -> Unit) 
         SectionHeader("Connected devices")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = MaterialTheme.shapes.medium) {
             Column(
-                Modifier.padding(16.dp).fillMaxWidth().androidClickable { onDeviceClick("pixel-8") },
+                Modifier.padding(16.dp).fillMaxWidth(),
             ) {
                 Text(connected?.peerName?.ifEmpty { "Pixel 8" } ?: "Pixel 8", style = MaterialTheme.typography.titleMedium)
                 Text("direct • since session start", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -235,6 +232,7 @@ fun SharingActiveScreen(onStopped: () -> Unit, onDeviceClick: (String) -> Unit) 
 
 @Composable
 fun DeviceDetailsScreen(deviceId: String, onBack: () -> Unit) {
+    val engine = rememberEngine()
     Column(Modifier.fillMaxSize().padding(22.dp)) {
         Text("Device details", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(10.dp))
@@ -249,7 +247,10 @@ fun DeviceDetailsScreen(deviceId: String, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         SecondaryButton("Rename", {}, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        SecondaryButton("Revoke access", {}, modifier = Modifier.fillMaxWidth())
+        SecondaryButton("Revoke access", {
+            engine.revokePeerById(deviceId)
+            onBack()
+        }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.weight(1f))
         SecondaryButton("Back", onBack, modifier = Modifier.fillMaxWidth())
     }

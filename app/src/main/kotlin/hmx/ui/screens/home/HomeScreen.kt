@@ -28,7 +28,6 @@ import hmx.domain.logic.ClientState
 import hmx.domain.logic.DataLimits
 import hmx.domain.logic.LimitStatus
 import hmx.domain.logic.ProviderState
-import hmx.mock.MockScenario
 import hmx.ui.components.LiveState
 import hmx.ui.components.MetricCard
 import hmx.ui.components.SectionHeader
@@ -38,12 +37,10 @@ import hmx.ui.components.StatusPill
 fun HomeScreen(
     openProvider: () -> Unit,
     openUser: () -> Unit,
-    onError: (String) -> Unit,
 ) {
     val engine = rememberEngine()
     val provider by engine.provider.state.collectAsState()
     val client by engine.client.state.collectAsState()
-    var showDebug by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -51,7 +48,6 @@ fun HomeScreen(
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("HMX", style = MaterialTheme.typography.headlineLarge)
-            TextButton(onClick = { showDebug = true }) { Text("debug") }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -85,31 +81,6 @@ fun HomeScreen(
         )
     }
 
-    if (showDebug) {
-        AlertDialog(
-            onDismissRequest = { showDebug = false },
-            title = { Text("Inject mock scenario") },
-            text = {
-                Column {
-                    MockScenario.entries.forEach { s ->
-                        TextButton(onClick = {
-                            engine.scenario = s
-                            if (s == MockScenario.PROVIDER_OFFLINE && client is ClientState.Connected) {
-                                onError("PROVIDER_OFFLINE")
-                            }
-                            showDebug = false
-                        }) { Text(s.name) }
-                    }
-                    TextButton(onClick = {
-                        engine.forceNetworkChange()
-                        showDebug = false
-                    }) { Text("FORCE_NETWORK_CHANGE") }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showDebug = false }) { Text("Close") } },
-        )
-    }
 }
 
 @Composable

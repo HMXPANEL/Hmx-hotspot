@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -12,8 +13,11 @@ android {
         applicationId = "hmx.remote.internet"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-phase2"
+        versionCode = 2
+        versionName = "0.2.0-phase3"
+
+        buildConfigField("String", "SUPABASE_URL", "\"${property("hmx.supabaseUrl") ?: "https://qemhnhxlxhnyufmjybgj.supabase.co"}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${property("hmx.supabaseAnonKey") ?: "sb_publishable_zuLuuxAul96V3VmK2Cfehg_-bAjwC6q"}\"")
     }
 
     buildTypes {
@@ -31,6 +35,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -53,6 +58,16 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.coroutines.android)
     implementation(libs.zxing.core)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.wireguard.tunnel)
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(files("libs/hmx-gateway.aar"))
 
     debugImplementation(libs.compose.ui.tooling)
 

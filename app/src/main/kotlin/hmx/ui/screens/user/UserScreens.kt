@@ -100,36 +100,9 @@ fun EnterCodeScreen(onConnectedFlow: () -> Unit, onError: (String) -> Unit, onBa
         PrimaryButton(
             "CONNECT",
             enabled = PairingCode.isValid(PairingCode.normalize(text)),
-            onClick = {
-                engine.connectWithCode(text)
-                if (engine.scenario == hmx.mock.MockScenario.PAIRING_EXPIRED ||
-                    engine.scenario == hmx.mock.MockScenario.PROVIDER_OFFLINE
-                ) {
-                    onError(engine.scenario.name)
-                }
-            },
+            onClick = { engine.connectWithCode(text) },
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(8.dp))
-        SecondaryButton("Back", onBack, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-@Composable
-fun ScannerScreen(onCodeScanned: (String) -> Unit, onBack: () -> Unit) {
-    // Mock scanner: camera integration arrives with ML Kit in a later phase.
-    Column(
-        Modifier.fillMaxSize().padding(22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        QrImage(payload = "hmx://p/mock-scan", size = 200.dp)
-        Spacer(Modifier.height(16.dp))
-        Text("Camera scanning comes with the real pairing phase.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
-        Text("[mock] tap connect below to simulate a scan", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(22.dp))
-        PrimaryButton("[mock] SCAN DETECTED", { onCodeScanned("MOCKCODE") }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
         SecondaryButton("Back", onBack, modifier = Modifier.fillMaxWidth())
     }

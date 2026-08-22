@@ -202,13 +202,16 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Diagnostics", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(12.dp))
+        val app = LocalContext.current.applicationContext as hmx.HmxApplication
+        val id = app.container.identityManager.identity.collectAsState().value
         SettingsCard {
             Column(Modifier.padding(16.dp)) {
                 StatRow("Provider state", provider::class.simpleName ?: "?")
                 StatRow("Client state", client::class.simpleName ?: "?")
-                StatRow("MTU", "1280")
-                StatRow("Keepalive", "25s")
-                StatRow("Mode", "direct (mock)")
+                StatRow("Device pubkey prefix", (id?.wgPublicKeyBase64 ?: "").take(8))
+                StatRow("Tunnel up", if (hmx.vpn.TunnelController.isUp()) "yes" else "no")
+                StatRow("Last handshake", hmx.vpn.TunnelController.lastHandshakeMs()?.let { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(it)) } ?: "none yet")
+                StatRow("Gateway engine", if (hmx.gateway.GatewayEngineHost.isRunning()) "running" else "stopped")
             }
         }
         Spacer(Modifier.weight(1f))

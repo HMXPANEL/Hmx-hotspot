@@ -21,7 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import hmx.vpn.TunnelController
 import hmx.di.rememberEngine
 import hmx.domain.logic.ClientState
 import hmx.domain.logic.DataLimits
@@ -36,23 +40,40 @@ import kotlinx.coroutines.delay
 @Composable
 fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
     val engine = rememberEngine()
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            engine.grantVpnPermission()
+            onProceed()
+        } else {
+            engine.denyVpnPermission()
+            onDenied()
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("Android will ask for VPN permission", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(12.dp))
         Text(
-            "HMX creates a local VPN interface so all of this device's apps can use the remote internet. " +
-                "Nothing is sent anywhere except through the trusted provider you just approved.",
+            "HMX creates a local VPN interface so this device can reach the approved provider. " +
+                "Traffic only flows through the trusted peer you just paired with.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(26.dp))
-        PrimaryButton("Continue to Android dialog", {
-            engine.grantVpnPermission()
-            onProceed()
+        PrimaryButton("Open Android VPN dialog", {
+            runCatching { TunnelController.init(context) }
+            val intent = kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
+            if (intent == null) {
+                // already granted
+                engine.grantVpnPermission()
+                onProceed()
+            } else {
+                launcher.launch(intent)
+            }
         }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        SecondaryButton("Deny (mock)", {
+        SecondaryButton("Not now", {
             engine.denyVpnPermission()
             onDenied()
         }, modifier = Modifier.fillMaxWidth())
