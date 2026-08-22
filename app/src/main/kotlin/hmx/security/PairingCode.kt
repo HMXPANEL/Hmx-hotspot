@@ -35,5 +35,5 @@ object PairingCode {
     fun format(code: String): String =
         if (code.length == LENGTH) code.substring(0, 4) + "-" + code.substring(4) else code
 
-    fun isExpired(createdAtMs: Long, nowMs: Long): Boolean = nowMs - createdAtMs > TTL_MS
+    fun isExpired(createdAtMs: Long, nowMs: Long): Boolean = nowMs - createdAtMs >= TTL_MS
 }

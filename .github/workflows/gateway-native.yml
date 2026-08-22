@@ -49,6 +49,7 @@ jobs:
       - name: Build AAR
         working-directory: gateway-native
         run: |
+          go get golang.org/x/mobile@latest
           go install golang.org/x/mobile/cmd/gomobile@latest
           "$(go env GOPATH)/bin/gomobile" init
           "$(go env GOPATH)/bin/gomobile" bind -target=android/arm64,android/arm -o hmx-gateway.aar .
