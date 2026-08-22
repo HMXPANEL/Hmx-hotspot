@@ -28,6 +28,7 @@ class SettingsRepository(private val context: Context) {
         val DAILY_LIMIT = longPreferencesKey("daily_limit_bytes")
         val WARNING_PCT = intPreferencesKey("warning_threshold_pct")
         val HARD_LIMIT = booleanPreferencesKey("hard_limit_enabled")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val BLOCK_QUIC = booleanPreferencesKey("block_quic_443")
         val DESIRED_ROLE = stringPreferencesKey("desired_role")
         val MANUAL_ENDPOINT = stringPreferencesKey("manual_endpoint")

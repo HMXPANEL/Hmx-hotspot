@@ -132,6 +132,7 @@ fun HmxApp() {
                 WelcomeScreen(onGetStarted = {
                     scope.launch { app.container.settingsRepository.setOnboardingDone() }
                     navTo(navController, Routes.HOME)
+                    Unit
                 })
             }
             composable(Routes.ROLE) {
