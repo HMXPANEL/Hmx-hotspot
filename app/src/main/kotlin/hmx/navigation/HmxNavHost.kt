@@ -130,9 +130,8 @@ fun HmxApp() {
                 val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as hmx.HmxApplication
                 val scope = androidx.compose.runtime.rememberCoroutineScope()
                 WelcomeScreen(onGetStarted = {
-                    scope.launch { app.container.settingsRepository.setOnboardingDone() }
+                    app.container.settingsRepository.setOnboardingDone()
                     navTo(navController, Routes.HOME)
-                    Unit
                 })
             }
             composable(Routes.ROLE) {
