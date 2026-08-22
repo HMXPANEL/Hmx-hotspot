@@ -28,3 +28,9 @@ Full-device internet routing · Chrome/YouTube tests · provider→internet forw
 
 ## CI
 android.yml GREEN @42fcbbb (tests+APK). gateway-native.yml GREEN (unchanged engine).
+
+## Provider "Preparing…" hang — ROOT CAUSE & FIX (post-device report)
+- Root cause: any exception in RealEngine.startSharing (identity init, registration, session RPC) set ProviderState.Failed, but PairingScreen's `else` branch rendered Failed as the preparing skeleton forever — no error navigation, no timeout. Likely on-device trigger: RPC args sent as JSON strings for int/bool params.
+- Fix: PairingScreen Failed → dedicated error screen; withTimeout(30–45s) → TIMEOUT state; jsonArgs emits native int/bool; safe HTTP/RPC status logging added.
+- Files: RealEngine.kt, ControlClient.kt, ProviderScreens.kt, HmxNavHost.kt.
+- CI: GREEN @ebd3d76 (tests+APK). Device retest pending owner; 3B handshake still NOT TESTED.

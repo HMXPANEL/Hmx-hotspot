@@ -68,3 +68,5 @@ Pairing/control plane (Supabase) → WireGuard tunnel on device → VpnService i
 
 ## 13. Recommended next step
 Connect a GitHub remote and let `android.yml` validate the Kotlin tree; fix any compile nits it reports (expected small). In parallel, procure two test devices for Phases 3–5. Do NOT start Phase 3 before the CI build is green and Phase 0 hardware gaps have an owner.
+
+<!-- provider-hang fix: see PHASE_3_REPORT tail; CI green @ebd3d76 -->
