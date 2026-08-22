@@ -317,6 +317,20 @@ class RealEngine(
         }
     }
 
+    /** Re-evaluate FGS need (called from Activity.onResume after a background-blocked start). */
+    fun resyncForegroundService(context: android.content.Context) {
+        val p = provider.state.value
+        val c = client.state.value
+        val pActive = p is hmx.domain.logic.ProviderState.Advertising ||
+            p is hmx.domain.logic.ProviderState.SharingConnected
+        val cActive = c !is hmx.domain.logic.ClientState.Idle &&
+            c !is hmx.domain.logic.ClientState.Failed &&
+            c !is hmx.domain.logic.ClientState.Disconnecting
+        if (pActive) hmx.service.HmxSessionService.start(context, "Sharing internet — waiting/approved")
+        else if (cActive) hmx.service.HmxSessionService.start(context, "Connected session active")
+        else hmx.service.HmxSessionService.stop(context)
+    }
+
     fun acknowledgeError() {
         if (client.state.value is ClientState.Failed) client.reset()
         if (provider.state.value is ProviderState.Failed) provider.reset()

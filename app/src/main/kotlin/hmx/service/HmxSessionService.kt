@@ -17,6 +17,11 @@ class HmxSessionService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onDestroy() {
+        running = false
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Session active"
         startForeground(NOTIFY_ID, notification(text))
@@ -45,20 +50,31 @@ class HmxSessionService : Service() {
 
         @Volatile private var running = false
 
-        /** Idempotent: repeated starts only update the notification text. */
+        /**
+         * Idempotent and crash-safe: Android throws ForegroundServiceStartNotAllowedException
+         * when called from the background; we degrade to no-FGS instead of crashing and let
+         * resync() retry next time the app is foregrounded.
+         */
         fun start(context: Context, text: String) {
             if (running) return
-            running = true
-            context.startForegroundService(
-                Intent(context, HmxSessionService::class.java).putExtra(EXTRA_TEXT, text)
-            )
+            runCatching {
+                context.startForegroundService(
+                    Intent(context, HmxSessionService::class.java).putExtra(EXTRA_TEXT, text)
+                )
+                running = true
+            }.onFailure { android.util.Log.w("HMX/FGS", "fgs start blocked: ${it.message}") }
         }
 
         /** Idempotent: stopping when not running is a no-op. */
         fun stop(context: Context) {
             if (!running) return
             running = false
-            context.stopService(Intent(context, HmxSessionService::class.java))
+            runCatching { context.stopService(Intent(context, HmxSessionService::class.java)) }
+        }
+
+        /** Call from Activity onResume: retry FGS if a session is active but service missing. */
+        fun resync(context: Context, active: Boolean, text: String) {
+            if (active && !running) start(context, text)
         }
     }
 }
