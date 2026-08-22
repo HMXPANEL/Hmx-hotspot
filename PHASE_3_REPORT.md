@@ -34,3 +34,7 @@ android.yml GREEN @42fcbbb (tests+APK). gateway-native.yml GREEN (unchanged engi
 - Fix: PairingScreen Failed → dedicated error screen; withTimeout(30–45s) → TIMEOUT state; jsonArgs emits native int/bool; safe HTTP/RPC status logging added.
 - Files: RealEngine.kt, ControlClient.kt, ProviderScreens.kt, HmxNavHost.kt.
 - CI: GREEN @ebd3d76 (tests+APK). Device retest pending owner; 3B handshake still NOT TESTED.
+
+## BAD_SECRET root cause (real-device log)
+ControlClient.register() sent legacy `secret_hash` field; deployed hmx-auth v3 expects raw `secret` over TLS (GoTrue password). Empty secret → regex fail → BAD_SECRET → identity/init failed → Failed state (now surfaced to error screen, not Preparing).
+Fix: send `"secret"` directly (contract check vs live function: 200 + device_id). CI GREEN @3114ddf.
