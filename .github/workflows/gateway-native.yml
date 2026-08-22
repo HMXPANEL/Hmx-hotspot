@@ -52,7 +52,7 @@ jobs:
           go get golang.org/x/mobile@latest
           go install golang.org/x/mobile/cmd/gomobile@latest
           "$(go env GOPATH)/bin/gomobile" init
-          "$(go env GOPATH)/bin/gomobile" bind -target=android/arm64,android/arm -o hmx-gateway.aar .
+          "$(go env GOPATH)/bin/gomobile" bind -target=android/arm64,android/arm -androidapi 26 -o hmx-gateway.aar .
       - uses: actions/upload-artifact@v4
         with:
           name: hmx-gateway-aar
