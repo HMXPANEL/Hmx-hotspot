@@ -22,12 +22,14 @@ data class WgPeerConfig(
         append("[Interface]\n")
         append("PrivateKey = ${hexToBase64(privateKeyHex)}\n")
         append("Address = $ownInnerIp/32\n")
+        append("DNS = 1.1.1.1\n")
         append("MTU = 1280\n")
         listenPort?.let { append("ListenPort = $it\n") }
         append("\n[Peer]\n")
         append("PublicKey = $peerPublicKeyBase64\n")
         endpoint?.let { append("Endpoint = $it\n") }
-        append("AllowedIPs = $peerInnerIp/32\n")
+        // Full tunnel: this device routes ALL traffic to the provider (internet sharing).
+        append("AllowedIPs = 0.0.0.0/0\n")
         append("PersistentKeepalive = 25\n")
     }
 

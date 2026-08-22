@@ -130,7 +130,11 @@ class RealEngine(
 
                 val priv = identityManager.ensure().wgPrivateKeyHex
                 val port = 40000 + (0..20000).random()
-                GatewayEngineHost.start(priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2")
+                val endpoint = "${localWifiIp() ?: ""}:$port".removePrefix(":")
+                runCatching { controlClient.rpc("hmx_set_peer_endpoint", mapOf("p_peer_id" to peerId, "p_endpoint" to endpoint)) }
+                    .onFailure { HmxLog.w("Pairing") { "endpoint publish failed" } }
+                HmxLog.i("Gateway") { "gateway starting on $port for peer $peerId" }
+                GatewayEngineHost.start(priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2", ownInnerIp = "10.66.$octet.1")
                     .onFailure { provider.fail(AppError.TUNNEL_FAILED) }
 
                 provider.approvePeer(pendingRequesterName ?: "device")
@@ -222,7 +226,8 @@ class RealEngine(
             val ap = approved ?: run { client.fail(AppError.UNKNOWN); return@launch }
             client.tunnelStarting()
             TunnelController.init(context())
-            val endpoint = manualEndpoint()?.takeIf { it.isNotBlank() }
+            val endpoint = ap["provider_endpoint"]?.takeIf { it.isNotBlank() } ?: manualEndpoint()?.takeIf { it.isNotBlank() }
+            HmxLog.i("WireGuard") { "peer config prepared (endpoint=${endpoint ?: "none"})" }
             val cfg = hmx.vpn.WgPeerConfig(
                 privateKeyHex = identityManager.ensure().wgPrivateKeyHex,
                 peerPublicKeyBase64 = ap["provider_pubkey"]!!,
@@ -238,9 +243,18 @@ class RealEngine(
             client.probeStarted()
             val hs = awaitHandshake(20_000)
             if (hs == null) {
+                HmxLog.w("WireGuard") { "handshake timeout" }
                 client.fail(AppError.HANDSHAKE_FAILED)
                 return@launch
             }
+            HmxLog.i("WireGuard") { "handshake detected" }
+            if (!probeInternet()) {
+                HmxLog.w("Network") { "connectivity verification failed" }
+                TunnelController.down()
+                client.fail(AppError.NO_INTERNET)
+                return@launch
+            }
+            HmxLog.i("Network") { "connectivity verification passed" }
             try {
                 val s = controlClient.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to "direct"))
                 openTunnelSessionId = s.str("id")
@@ -319,6 +333,25 @@ class RealEngine(
     lateinit var contextProvider: () -> android.content.Context
 
     private fun context(): android.content.Context = contextProvider()
+
+    /** Best-effort local Wi-Fi/LAN IPv4 for same-network direct handshakes. */
+    private fun localWifiIp(): String? = runCatching {
+        java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.asSequence() }
+            .filterIsInstance<java.net.Inet4Address>()
+            .firstOrNull { !it.isLoopbackAddress }
+            ?.hostAddress
+    }.getOrNull()
+
+    /** Real internet check routed through the active VPN tunnel. */
+    private fun probeInternet(): Boolean = runCatching {
+        val conn = java.net.URL("http://connectivitycheck.gstatic.com/generate_204").openConnection()
+            as java.net.HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        try { conn.responseCode == 204 || conn.responseCode == 200 } finally { conn.disconnect() }
+    }.onFailure { HmxLog.w("Network", it) { "probe error" } }.getOrDefault(false)
 
     private fun pairingHash(code: String): String = hmx.data.control.ControlClient.sha256Hex(code)
 
