@@ -32,14 +32,15 @@ import hmx.ui.components.LiveState
 import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(onDone: () -> Unit) {
+fun SplashScreen(onDone: (Boolean) -> Unit) {
     var appeared by remember { mutableStateOf(false) }
     val alpha by animateFloatAsState(if (appeared) 1f else 0f, tween(650), label = "splash")
 
     LaunchedEffect(Unit) {
         appeared = true
         delay(1100)
-        onDone()
+        val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as hmx.HmxApplication
+        onDone(app.container.settingsRepository.isOnboardingDone())
     }
 
     Box(

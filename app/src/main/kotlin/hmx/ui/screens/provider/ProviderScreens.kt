@@ -175,11 +175,24 @@ fun SharingActiveScreen(onStopped: () -> Unit, onDeviceClick: (String) -> Unit) 
     val state by engine.provider.state.collectAsState()
     var confirmStop by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        if (state !is ProviderState.SharingConnected) onStopped()
-    }
-
     val connected = state as? ProviderState.SharingConnected
+    val advertising = state as? ProviderState.Advertising
+
+    if (advertising != null) {
+        Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            StateOrb(LiveState.CONNECTING, size = 84)
+            Spacer(Modifier.height(8.dp))
+            SectionHeader("Waiting for a device")
+            Text("Your code: ${advertising.code.code}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            hmx.ui.components.CodeDisplay("${advertising.code.code}")
+            Spacer(Modifier.height(12.dp))
+            hmx.ui.components.QrImage(payload = "hmx://p/${advertising.code.code}", size = 180.dp)
+            Spacer(Modifier.height(16.dp))
+            PrimaryButton("CANCEL", { engine.stopSharing(); onStopped() }, modifier = Modifier.fillMaxWidth())
+        }
+        return
+    }
 
     Column(Modifier.fillMaxSize().padding(22.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
