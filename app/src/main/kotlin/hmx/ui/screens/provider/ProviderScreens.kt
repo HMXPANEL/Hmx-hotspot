@@ -127,7 +127,7 @@ fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit) {
             is ProviderState.Advertising -> {
                 val c = code ?: s.code
                 Spacer(Modifier.height(18.dp))
-                QrImage(payload = "hmx://p/${c.code}", size = 210)
+                QrImage(payload = "hmx://p/${c.code}", size = 210.dp)
                 Spacer(Modifier.height(14.dp))
                 Text("Connection Code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 CodeDisplay(c.formatted())

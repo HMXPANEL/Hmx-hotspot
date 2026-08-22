@@ -204,8 +204,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         SettingsCard {
             Column(Modifier.padding(16.dp)) {
-                StatRow("Provider state", provider.javaClass.simpleName)
-                StatRow("Client state", client.javaClass.simpleName)
+                StatRow("Provider state", provider::class.simpleName ?: "?")
+                StatRow("Client state", client::class.simpleName ?: "?")
                 StatRow("MTU", "1280")
                 StatRow("Keepalive", "25s")
                 StatRow("Mode", "direct (mock)")

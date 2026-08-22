@@ -123,7 +123,7 @@ fun ScannerScreen(onCodeScanned: (String) -> Unit, onBack: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        QrImage(payload = "hmx://p/mock-scan", size = 200)
+        QrImage(payload = "hmx://p/mock-scan", size = 200.dp)
         Spacer(Modifier.height(16.dp))
         Text("Camera scanning comes with the real pairing phase.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))

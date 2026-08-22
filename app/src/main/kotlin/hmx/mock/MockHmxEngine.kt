@@ -1,7 +1,9 @@
 package hmx.mock
 
 import hmx.core.error.AppError
+import hmx.domain.logic.ClientMachine
 import hmx.domain.logic.ClientState
+import hmx.domain.logic.ProviderMachine
 import hmx.domain.logic.ProviderState
 import hmx.domain.model.ConnectionMode
 import hmx.domain.model.Device
@@ -76,6 +78,10 @@ class MockHmxEngine(
 
     fun simulateIncomingPairing(name: String, fingerprint: String) {
         provider.requestPairing(name, fingerprint)
+    }
+
+    fun rejectPeer() {
+        provider.rejectPeer()
     }
 
     fun approvePeer() {
