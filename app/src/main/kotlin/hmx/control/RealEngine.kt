@@ -3,6 +3,7 @@ package hmx.control
 import hmx.core.error.AppError
 import hmx.data.control.ControlClient
 import hmx.data.control.mapRpcError
+import hmx.data.control.str
 import hmx.domain.logic.ClientMachine
 import hmx.domain.logic.ClientState
 import hmx.domain.logic.ProviderMachine
@@ -119,8 +120,8 @@ class RealEngine(
 
                 val priv = identityManager.ensure().wgPrivateKeyHex
                 val port = 40000 + (0..20000).random()
-                val gwUp = GatewayEngineHost.start(priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2")
-                if (!gwUp.isSuccess) provider.fail(AppError.TUNNEL_FAILED)
+                GatewayEngineHost.start(priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2")
+                    .onFailure { provider.fail(AppError.TUNNEL_FAILED) }
 
                 provider.approvePeer(pendingRequesterName ?: "device")
                 startGatewayStats()
@@ -312,6 +313,16 @@ class RealEngine(
     private fun pairingHash(code: String): String = hmx.data.control.ControlClient.sha256Hex(code)
 }
 
+
+    private fun startGatewayStats() {
+        statsJob?.cancel()
+        statsJob = scope.launch {
+            while (provider.state.value is ProviderState.SharingConnected) {
+                delay(1000)
+                GatewayEngineHost.rxTxBytes()?.let { (rx, tx) -> provider.updateStats(TrafficStats(rx, tx)) }
+            }
+        }
+    }
 
     fun revokePeerById(peerId: String) {
         scope.launch {
