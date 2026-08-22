@@ -9,15 +9,21 @@ android {
     namespace = "hmx"
     compileSdk = 35
 
+    val supabaseUrl = findProperty("hmx.supabaseUrl")?.toString()
+        ?: "https://qemhnhxlxhnyufmjybgj.supabase.co"
+    val supabaseAnonKey = findProperty("hmx.supabaseAnonKey")?.toString()
+        ?: "sb_publishable_zuLuuxAul96V3VmK2Cfehg_-bAjwC6q"
+
     defaultConfig {
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
         applicationId = "hmx.remote.internet"
         minSdk = 26
         targetSdk = 35
         versionCode = 2
         versionName = "0.2.0-phase3"
 
-        buildConfigField("String", "SUPABASE_URL", "\"${property("hmx.supabaseUrl") ?: "https://qemhnhxlxhnyufmjybgj.supabase.co"}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${property("hmx.supabaseAnonKey") ?: "sb_publishable_zuLuuxAul96V3VmK2Cfehg_-bAjwC6q"}\"")
+
     }
 
     buildTypes {
