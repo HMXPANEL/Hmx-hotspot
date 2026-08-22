@@ -85,7 +85,7 @@ fun ProviderDashboardScreen(onStartSharing: () -> Unit, onOpenSharing: () -> Uni
 }
 
 @Composable
-fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit) {
+fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit, onError: (String) -> Unit) {
     val engine = rememberEngine()
     val state by engine.provider.state.collectAsState()
     var code by remember { mutableStateOf<PairingCodeInfo?>(null) }
@@ -102,6 +102,7 @@ fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit) {
         when (val s = state) {
             is ProviderState.Advertising -> code = s.code
             is ProviderState.SharingConnected -> onApproved()
+            is ProviderState.Failed -> onError(s.error.name)
             else -> Unit
         }
     }
