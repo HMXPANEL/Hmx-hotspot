@@ -1,6 +1,10 @@
 # IMPLEMENTATION_PROGRESS.md
 
-Last updated: 2026-08-22 (autonomous run: Phase 0 → Phase 1 → Phase 2, then STOP)
+Last updated: 2026-08-22 (Phase 3A+3B run)
+
+Phase 3A = PASS (backend 19/19 live e2e; Android mocks removed, real pairing wired)
+Phase 3B = PARTIAL (all code real & green; physical handshake NOT RUN — no devices)
+See PHASE_3_REPORT.md · SUPABASE_RESET_REPORT.md
 
 ## 1. Phase 0 status — **PARTIAL (core proven)**
 
