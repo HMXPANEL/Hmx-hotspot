@@ -36,6 +36,6 @@
         </service>
             <service
             android:name="hmx.service.HmxSessionService"
-            android:exported="false" android:foregroundServiceType="data" />
+            android:exported="false" android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
