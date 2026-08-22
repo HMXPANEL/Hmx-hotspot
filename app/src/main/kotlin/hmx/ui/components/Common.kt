@@ -195,7 +195,7 @@ fun SkeletonBlock(height: Int, modifier: Modifier = Modifier) {
 @Composable
 fun CodeDisplay(code: String, modifier: Modifier = Modifier) {
     Text(
-        text = code.chunked(4).joinToString("-"),
+        text = code, // canonical format comes from PairingCode.format(); do not re-format here
         style = MaterialTheme.typography.headlineMedium,
         color = HmxAccentColor(),
         modifier = modifier,

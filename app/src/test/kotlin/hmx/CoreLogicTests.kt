@@ -34,6 +34,11 @@ class PairingCodeTest {
         assertFalse(PairingCode.isValid("HMXA7K2")) // too long
         assertTrue(PairingCode.isValid("HMXA7K"))
         assertEquals("HMX-A7K", PairingCode.format("HMXA7K"))
+            assertEquals("HMX-D5H", PairingCode.format("HMXD5H"))
+            assertEquals("HMXD5H", PairingCode.normalize("HMX-D5H"))       // UI representation -> raw
+            assertEquals("HMXD5H", PairingCode.normalize("HMX--D5H"))      // double separator stripped
+            assertTrue(PairingCode.isValid(PairingCode.normalize("HMX-D5H")))
+            assertFalse(PairingCode.isValid(PairingCode.normalize("HMX-D5H-EXTRA")))
     }
 
     @Test

@@ -131,7 +131,11 @@ fun PairingScreen(onApproved: () -> Unit, onCancel: () -> Unit, onError: (String
                 QrImage(payload = "hmx://p/${c.code}", size = 210.dp)
                 Spacer(Modifier.height(14.dp))
                 Text("Connection Code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                CodeDisplay(c.formatted())
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                    CodeDisplay(c.formatted())
+                    Spacer(Modifier.width(8.dp))
+                    CopyCodeChip(c.formatted())
+                }
                 val remainSec = ((c.expiresAtMs - nowTick) / 1000).coerceAtLeast(0)
                 Text(
                     "Expires in %02d:%02d".format(remainSec / 60, remainSec % 60),
@@ -183,9 +187,13 @@ fun SharingActiveScreen(onStopped: () -> Unit, onDeviceClick: (String) -> Unit) 
             StateOrb(LiveState.CONNECTING, size = 84)
             Spacer(Modifier.height(8.dp))
             SectionHeader("Waiting for a device")
-            Text("Your code: ${advertising.code.code}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Your code: ${advertising.code.formatted()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            hmx.ui.components.CodeDisplay("${advertising.code.code}")
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                hmx.ui.components.CodeDisplay(advertising.code.formatted())
+                Spacer(Modifier.width(8.dp))
+                CopyCodeChip(advertising.code.formatted())
+            }
             Spacer(Modifier.height(12.dp))
             hmx.ui.components.QrImage(payload = "hmx://p/${advertising.code.code}", size = 180.dp)
             Spacer(Modifier.height(16.dp))
@@ -272,3 +280,25 @@ fun DeviceDetailsScreen(deviceId: String, onBack: () -> Unit) {
 
 private fun Modifier.androidClickable(onClick: () -> Unit): Modifier =
     this.clickable(onClick = onClick)
+
+@Composable
+fun CopyCodeChip(code: String) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(1500)
+            copied = false
+        }
+    }
+    TextButton(onClick = {
+        clipboard.setText(androidx.compose.ui.text.AnnotatedString(code))
+        copied = true
+    }) {
+        Text(
+            if (copied) "COPIED" else "COPY",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
