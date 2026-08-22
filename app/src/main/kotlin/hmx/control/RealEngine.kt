@@ -311,8 +311,6 @@ class RealEngine(
     private fun context(): android.content.Context = contextProvider()
 
     private fun pairingHash(code: String): String = hmx.data.control.ControlClient.sha256Hex(code)
-}
-
 
     private fun startGatewayStats() {
         statsJob?.cancel()
@@ -329,3 +327,4 @@ class RealEngine(
             try { client.rpc("hmx_revoke_peer", mapOf("p_peer_id" to peerId)); refreshLists() } catch (_: Exception) {}
         }
     }
+}
