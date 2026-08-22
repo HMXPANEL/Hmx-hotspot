@@ -69,10 +69,10 @@ class ControlClient {
 
     suspend fun register(name: String, pubkey: String, secret: String): String {
         return withContext(Dispatchers.IO) {
-            val hash = sha256Hex(secret)
-            val body = """{"action":"register","name":${jStr(name)},"pubkey":${jStr(pubkey)},"secret":null}"""
-            val bodyWithHash = body.replace("\"secret\":null", "\"secret_hash\":\"$hash\"")
-            val (code, text) = exec("POST", "functions/v1/hmx-auth", bodyWithHash)
+            // Contract (hmx-auth v3): RAW secret over TLS; server stores sha256(secret).
+            val body = """{"action":"register","name":${jStr(name)},"pubkey":${jStr(pubkey)},"secret":${jStr(secret)}}"""
+            HmxLog.i("Auth") { "register -> POST hmx-auth" }
+            val (code, text) = exec("POST", "functions/v1/hmx-auth", body)
             if (code != 200) throw mapHttpError(code, text)
             json.parseToJsonElement(text).jsonObject.str("device_id")
                 ?: throw RpcException("REGISTER_FAILED")
