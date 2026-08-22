@@ -119,8 +119,20 @@ fun HmxApp() {
             startDestination = Routes.SPLASH,
             modifier = Modifier.padding(padding),
         ) {
-            composable(Routes.SPLASH) { SplashScreen { navTo(navController, Routes.WELCOME) } }
-            composable(Routes.WELCOME) { WelcomeScreen(onGetStarted = { navTo(navController, Routes.ROLE) }) }
+            composable(Routes.SPLASH) {
+                SplashScreen { onboarded ->
+                    if (onboarded) navTo(navController, Routes.HOME)
+                    else navTo(navController, Routes.WELCOME)
+                }
+            }
+            composable(Routes.WELCOME) {
+                val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as hmx.HmxApplication
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                WelcomeScreen(onGetStarted = {
+                    scope.launch { app.container.settingsRepository.setOnboardingDone() }
+                    navTo(navController, Routes.HOME)
+                })
+            }
             composable(Routes.ROLE) {
                 RoleSelectScreen(
                     onProvider = { navTo(navController, Routes.PROVIDER_DASHBOARD) },

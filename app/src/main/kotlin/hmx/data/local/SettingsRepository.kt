@@ -31,6 +31,7 @@ class SettingsRepository(private val context: Context) {
         val BLOCK_QUIC = booleanPreferencesKey("block_quic_443")
         val DESIRED_ROLE = stringPreferencesKey("desired_role")
         val MANUAL_ENDPOINT = stringPreferencesKey("manual_endpoint")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
     }
 
     val settings: Flow<HmxSettings> = context.hmxDataStore.data.map { prefs ->
@@ -63,6 +64,13 @@ class SettingsRepository(private val context: Context) {
         }
         cachedManualEndpoint = value?.takeIf { it.isNotBlank() }
     }
+
+    suspend fun setOnboardingDone() {
+        context.hmxDataStore.edit { it[ONBOARDING_DONE] = true }
+    }
+
+    suspend fun isOnboardingDone(): Boolean =
+        context.hmxDataStore.data.map { it[ONBOARDING_DONE] ?: false }.first()
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.hmxDataStore.edit(block)
