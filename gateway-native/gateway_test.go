@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"hmx/gateway-native/internal/netutil"
+	"hmx/gateway-native/internal/testclient"
 )
 
 func udpAddrPort(a *net.UDPAddr) netip.AddrPort {
@@ -23,7 +26,7 @@ func tcpEchoServer(t *testing.T) string {
 	var ln net.Listener
 	var err error
 	for i := 0; i < 3; i++ {
-		ln, err = net.Listen("tcp", PrimaryLocalIPv4OrLoop()+":0")
+		ln, err = net.Listen("tcp", netutil.PrimaryIPv4OrLoop()+":0")
 		if err == nil {
 			break
 		}
@@ -50,7 +53,7 @@ func tcpEchoServer(t *testing.T) string {
 
 func udpEchoServer(t *testing.T) netip.AddrPort {
 	t.Helper()
-	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(PrimaryLocalIPv4OrLoop()), Port: 0})
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(netutil.PrimaryIPv4OrLoop()), Port: 0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,34 +71,35 @@ func udpEchoServer(t *testing.T) netip.AddrPort {
 	return udpAddrPort(pc.LocalAddr().(*net.UDPAddr))
 }
 
-func startPair(t *testing.T, tweak func(*Config)) (*Gateway, *Client) {
+func startPair(t *testing.T, tweak func(*Config)) (*Gateway, *testclient.Client) {
 	t.Helper()
-	gwPriv, gwPub, err := GenerateKeyPair()
+	gwKp, err := GenerateKeyPair()
 	if err != nil {
 		t.Fatal(err)
 	}
-	clPriv, clPub, err := GenerateKeyPair()
+	clKp, err := GenerateKeyPair()
 	if err != nil {
 		t.Fatal(err)
 	}
+	gwPriv, gwPub, clPriv, clPub := gwKp.PrivHex, gwKp.PubHex, clKp.PrivHex, clKp.PubHex
 	for attempt := 0; ; attempt++ {
 		pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
 		if err != nil {
 			t.Fatal(err)
 		}
-		port := uint16(pc.LocalAddr().(*net.UDPAddr).Port)
+		port := pc.LocalAddr().(*net.UDPAddr).Port
 		pc.Close()
 
 		cfg := Config{
 			PrivateKeyHex: gwPriv,
 			ListenPort:    port,
 			InnerIPv4:     "10.66.0.1",
-			DNSUpstream:   PrimaryLocalIPv4OrLoop() + ":1",
+			DNSUpstream:   netutil.PrimaryIPv4OrLoop() + ":1",
 		}
 		if tweak != nil {
 			tweak(&cfg)
 		}
-		gw, err := Start(cfg)
+		gw, err := Start(&cfg)
 		if err != nil {
 			if attempt < 3 {
 				time.Sleep(200 * time.Millisecond)
@@ -107,9 +111,9 @@ func startPair(t *testing.T, tweak func(*Config)) (*Gateway, *Client) {
 			gw.Stop()
 			t.Fatal(err)
 		}
-		var cl *Client
+		var cl *testclient.Client
 		for i := 0; i < 3; i++ {
-			cl, err = StartClient(ClientConfig{
+			cl, err = testclient.StartClient(testclient.ClientConfig{
 				PrivateKeyHex:   clPriv,
 				GatewayPubHex:   gwPub,
 				GatewayEndpoint: fmt.Sprintf("127.0.0.1:%d", port),
@@ -130,7 +134,7 @@ func startPair(t *testing.T, tweak func(*Config)) (*Gateway, *Client) {
 	}
 }
 
-func awaitHandshake(t *testing.T, cl *Client) {
+func awaitHandshake(t *testing.T, cl *testclient.Client) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
@@ -149,7 +153,7 @@ func awaitHandshake(t *testing.T, cl *Client) {
 	t.Fatal("wireguard handshake not established within 15s")
 }
 
-func awaitTunnel(t *testing.T, cl *Client, target string) net.Conn {
+func awaitTunnel(t *testing.T, cl *testclient.Client, target string) net.Conn {
 	awaitHandshake(t, cl)
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
@@ -247,7 +251,7 @@ func TestGatewayDNSForwarding(t *testing.T) {
 }
 
 func TestGatewayHardLimitCutsFlows(t *testing.T) {
-	hostIP := PrimaryLocalIPv4OrLoop()
+	hostIP := netutil.PrimaryIPv4OrLoop()
 	ln, err := net.Listen("tcp", hostIP+":0")
 	if err != nil {
 		t.Fatal(err)
@@ -296,20 +300,21 @@ func TestGatewayHardLimitCutsFlows(t *testing.T) {
 }
 
 func TestWrongKeyPeerCannotHandshake(t *testing.T) {
-	gwPriv, gwPub, _ := GenerateKeyPair()
-	badPriv, _, _ := GenerateKeyPair()
+	gwKp, _ := GenerateKeyPair()
+	badKp, _ := GenerateKeyPair()
+	gwPriv, gwPub, badPriv := gwKp.PrivHex, gwKp.PubHex, badKp.PrivHex
 	var gw *Gateway
-	var port uint16
+	var port int
 	var err error
 	for attempt := 0; ; attempt++ {
 		pc, perr := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
 		if perr != nil {
 			t.Fatal(perr)
 		}
-		port = uint16(pc.LocalAddr().(*net.UDPAddr).Port)
+		port = pc.LocalAddr().(*net.UDPAddr).Port
 		pc.Close()
 
-		gw, err = Start(Config{PrivateKeyHex: gwPriv, ListenPort: port, InnerIPv4: "10.66.0.1"})
+		gw, err = Start(&Config{PrivateKeyHex: gwPriv, ListenPort: port, InnerIPv4: "10.66.0.1"})
 		if err == nil {
 			break
 		}
@@ -319,7 +324,7 @@ func TestWrongKeyPeerCannotHandshake(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	defer gw.Stop()
-	cl, err := StartClient(ClientConfig{
+	cl, err := testclient.StartClient(testclient.ClientConfig{
 		PrivateKeyHex:   badPriv,
 		GatewayPubHex:   gwPub,
 		GatewayEndpoint: fmt.Sprintf("127.0.0.1:%d", port),

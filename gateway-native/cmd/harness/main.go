@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"hmx/gateway-native/internal/netutil"
+	"hmx/gateway-native/internal/testclient"
 	"net"
 	"net/http"
 	"os"
@@ -32,14 +34,14 @@ func record(name string, ok bool, detail string) {
 
 type pair struct {
 	gw     *hmx.Gateway
-	cl     *hmx.Client
+	cl     *testclient.Client
 	gwPriv string
 	clPub  string
-	port   uint16
+	port   int
 	hsMs   int64
 }
 
-func handshakeTS(cl *hmx.Client) uint64 {
+func handshakeTS(cl *testclient.Client) uint64 {
 	s, err := cl.Dev.IpcGet()
 	if err != nil {
 		return 0
@@ -53,7 +55,7 @@ func handshakeTS(cl *hmx.Client) uint64 {
 	return 0
 }
 
-func awaitFreshHandshake(cl *hmx.Client, after uint64, within time.Duration) bool {
+func awaitFreshHandshake(cl *testclient.Client, after uint64, within time.Duration) bool {
 	deadline := time.Now().Add(within)
 	for time.Now().Before(deadline) {
 		if ts := handshakeTS(cl); ts > after {
@@ -70,8 +72,9 @@ func awaitFreshHandshake(cl *hmx.Client, after uint64, within time.Duration) boo
 // functional verification is the only reliable check here. On standard Linux
 // (e.g. CI runners) the first attempt succeeds.
 func startVerifiedPair(inner1, inner2 string, tweak func(*hmx.Config)) *pair {
-	gwPriv, gwPub, _ := hmx.GenerateKeyPair()
-	clPriv, clPub, _ := hmx.GenerateKeyPair()
+	gwKp, _ := hmx.GenerateKeyPair()
+	clKp, _ := hmx.GenerateKeyPair()
+	gwPriv, gwPub, clPriv, clPub := gwKp.PrivHex, gwKp.PubHex, clKp.PrivHex, clKp.PubHex
 	start := time.Now()
 
 	for attempt := 0; attempt < 5; attempt++ {
@@ -80,7 +83,7 @@ func startVerifiedPair(inner1, inner2 string, tweak func(*hmx.Config)) *pair {
 			time.Sleep(400 * time.Millisecond)
 			continue
 		}
-		port := uint16(pc.LocalAddr().(*net.UDPAddr).Port)
+		port := pc.LocalAddr().(*net.UDPAddr).Port
 		pc.Close()
 
 		cfg := hmx.Config{
@@ -92,13 +95,13 @@ func startVerifiedPair(inner1, inner2 string, tweak func(*hmx.Config)) *pair {
 		if tweak != nil {
 			tweak(&cfg)
 		}
-		gw, gerr := hmx.Start(cfg)
+		gw, gerr := hmx.Start(&cfg)
 		if gerr != nil {
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 		gw.AddPeer(clPub, inner2+"/32")
-		cl, cerr := hmx.StartClient(hmx.ClientConfig{
+		cl, cerr := testclient.StartClient(testclient.ClientConfig{
 			PrivateKeyHex:   clPriv,
 			GatewayPubHex:   gwPub,
 			GatewayEndpoint: fmt.Sprintf("127.0.0.1:%d", port),
@@ -148,7 +151,7 @@ func (p *pair) restart(tweak func(*hmx.Config)) bool {
 		if tweak != nil {
 			tweak(&cfg)
 		}
-		gw, err := hmx.Start(cfg)
+		gw, err := hmx.Start(&cfg)
 		if err != nil {
 			time.Sleep(500 * time.Millisecond)
 			continue
@@ -369,7 +372,7 @@ func testLongSession(tc *http.Client, total time.Duration) {
 }
 
 func testUDPRoundtrip() {
-	echoIP := hmx.PrimaryLocalIPv4OrLoop()
+	echoIP := netutil.PrimaryIPv4OrLoop()
 	echoPC, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(echoIP)})
 	if err != nil {
 		record("udp-roundtrip", false, "echo setup: "+err.Error())

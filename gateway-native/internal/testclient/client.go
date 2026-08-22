@@ -1,4 +1,4 @@
-package hmxgateway
+package testclient
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 )
+
+const defaultMTU = 1280
 
 // ClientConfig describes the Phone-B-side test peer. It uses the stock
 // wireguard-go netstack wrapper (client role), mirroring what the official
@@ -49,7 +51,7 @@ func startClient(cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("CreateNetTUN: %w", err)
 	}
 	wgLog := &device.Logger{
-		Verbosef: debugLogger("client"),
+		Verbosef: func(string, ...any) {},
 		Errorf:   func(f string, a ...any) { fmt.Printf("[hmx-client] "+f+"\n", a...) },
 	}
 	dev := device.NewDevice(tdev, conn.NewDefaultBind(), wgLog)

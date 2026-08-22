@@ -34,7 +34,7 @@ const (
 
 type Config struct {
 	PrivateKeyHex  string
-	ListenPort     uint16
+	ListenPort     int
 	InnerIPv4      string
 	InnerIPv6      string
 	DNSInner       string
@@ -64,22 +64,27 @@ type Gateway struct {
 	done  chan struct{}
 }
 
-func GenerateKeyPair() (privHex, pubHex string, err error) {
+type KeyPair struct {
+	PrivHex string
+	PubHex  string
+}
+
+func GenerateKeyPair() (*KeyPair, error) {
 	priv := make([]byte, 32)
-	if _, err = rand.Read(priv); err != nil {
-		return "", "", err
+	if _, err := rand.Read(priv); err != nil {
+		return nil, err
 	}
 	priv[0] &= 248
 	priv[31] &= 127
 	priv[31] |= 64
 	pub, err := curve25519.X25519(priv, curve25519.Basepoint)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
-	return hex.EncodeToString(priv), hex.EncodeToString(pub), nil
+	return &KeyPair{PrivHex: hex.EncodeToString(priv), PubHex: hex.EncodeToString(pub)}, nil
 }
 
-func Start(cfg Config) (g *Gateway, err error) {
+func Start(cfg *Config) (g *Gateway, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("gateway start panicked: %v", r)
@@ -88,7 +93,7 @@ func Start(cfg Config) (g *Gateway, err error) {
 	return startGateway(cfg)
 }
 
-func startGateway(cfg Config) (*Gateway, error) {
+func startGateway(cfg *Config) (*Gateway, error) {
 	if cfg.MTU <= 0 {
 		cfg.MTU = defaultMTU
 	}
@@ -119,7 +124,7 @@ func startGateway(cfg Config) (*Gateway, error) {
 	}
 	t.tag = "gateway"
 	g := &Gateway{
-		cfg:   cfg,
+		cfg:   *cfg,
 		tun:   t,
 		conns: make(map[io.Closer]struct{}),
 		done:  make(chan struct{}),
@@ -154,8 +159,8 @@ func (g *Gateway) RemovePeer(publicKeyHex string) error {
 	return g.dev.IpcSet("public_key=" + publicKeyHex + "\nremove=true\n")
 }
 
-func (g *Gateway) Stats() Stats {
-	return Stats{
+func (g *Gateway) Stats() *Stats {
+	return &Stats{
 		RxBytes:      g.rx.Load(),
 		TxBytes:      g.tx.Load(),
 		ActiveFlows:  g.flows.Load(),
@@ -324,24 +329,4 @@ func (g *Gateway) udpPump(inner *gonet.UDPConn, host *net.UDPConn) {
 	}()
 	<-done
 	g.untrack(inner)
-}
-
-func PrimaryLocalIPv4() (string, bool) {
-	c, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		return "", false
-	}
-	defer c.Close()
-	ip := c.LocalAddr().(*net.UDPAddr).IP.To4()
-	if ip == nil || ip.IsLoopback() {
-		return "", false
-	}
-	return ip.String(), true
-}
-
-func PrimaryLocalIPv4OrLoop() string {
-	if ip, ok := PrimaryLocalIPv4(); ok {
-		return ip
-	}
-	return "127.0.0.1"
 }
