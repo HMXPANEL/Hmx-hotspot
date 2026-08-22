@@ -42,14 +42,17 @@ Go (Phase 0): gateway-native/{stack.go, gateway.go, client.go, debug.go, gateway
 ## 7. Files modified
 PLANNING.md untouched. PHASE_0_REPORT.md created. Docs added: ARCHITECTURE.md · DEVELOPMENT.md · TESTING.md · this file.
 
-## 8. Build result — **NOT RUN LOCALLY (per directive)**
-No Android SDK locally and local APK builds are prohibited by owner instruction. Verification path: push repo → `android.yml` runs unit tests + assembleDebug. Kotlin written conservatively against stable APIs (BOM 2024.10.01, material3 1.3.x, navigation 2.8.x); first CI run may surface minor compile fixes — budget one iteration.
+## 8. Build result — **PASS (CI)**
+Local builds remain prohibited (no SDK). Pushed to github.com/HMXPANEL/Hmx-hotspot; after three fix rounds (`go.sum` regeneration → UI import/Dp/rejectPeer fixes → pairing expiry boundary) `android.yml` is GREEN on main: unit tests pass, `assembleDebug` produces the APK artifact.
 
-## 9. Test result
-Go suite: PASS (host). Kotlin JVM tests: authored, execution deferred to same CI job.
+## 9. Test result — **PASS**
+Kotlin JVM suites (machines, pairing codes, log redaction, limits): all pass in CI.
+Go suite (`go vet` + loopback tests): PASS in CI on standard runners.
 
-## 10. GitHub Actions result — NOT RUN (repo has no remote yet)
-Workflows committed and ready; enable by connecting a GitHub remote and pushing.
+## 10. GitHub Actions result — **GREEN**
+- android.yml: success (artifact: hmx-debug-apk ~10.5 MB)
+- gateway-native.yml: success (artifacts: hmx-gateway-aar ~9.2 MB, gomobile bind arm64+arm, -androidapi 26, NDK r27)
+Fix history: ① missing go.sum entries for x/crypto & x/net ② MockHmxEngine lost machine-class imports during state-import swap (+ QrImage Int-vs-Dp, DevicesScreen fillMaxWidth import, engine.rejectPeer passthrough) ③ PairingCode.isExpired boundary now >=TTL per five-minute spec ④ gomobile needed x/mobile module dep + -androidapi 26 ⑤ gateway API made gobind-bindable (KeyPair struct, pointer configs/stats, internal packages for host-only helpers/test client).
 
 ## 11. Known issues
 - Sandbox flake documented in PHASE_0_REPORT §19 (kernel rejects some WG socket options intermittently; harness self-heals; standard runners unaffected).
