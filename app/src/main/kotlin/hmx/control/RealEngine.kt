@@ -33,7 +33,7 @@ import java.util.UUID
 class RealEngine(
     private val scope: CoroutineScope,
     val identityManager: IdentityManager,
-    controlClient: ControlClient,
+    private val controlClient: ControlClient,
     private val manualEndpoint: () -> String?,
 ) {
     val provider = ProviderMachine()
