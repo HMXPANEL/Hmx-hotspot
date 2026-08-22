@@ -50,6 +50,26 @@ class RealEngine(
     var thisDeviceName: String = "HMX device"
         private set
 
+    init {
+        // Phase 4: keep a foreground service alive exactly while a real session is active.
+        scope.launch {
+            kotlinx.coroutines.flow.combine(provider.state, client.state) { p, c -> p to c }
+                .collect { (p, c) ->
+                    val ctx = contextProvider()
+                    val pActive = p is hmx.domain.logic.ProviderState.Advertising ||
+                        p is hmx.domain.logic.ProviderState.SharingConnected
+                    val cActive = c !is hmx.domain.logic.ClientState.Idle &&
+                        c !is hmx.domain.logic.ClientState.Failed &&
+                        c !is hmx.domain.logic.ClientState.Disconnecting
+                    when {
+                        pActive -> hmx.service.HmxSessionService.start(ctx, "Sharing internet — waiting/approved")
+                        cActive -> hmx.service.HmxSessionService.start(ctx, "Connected session active")
+                        else -> hmx.service.HmxSessionService.stop(ctx)
+                    }
+                }
+        }
+    }
+
     private var currentPairingSessionId: String? = null
     private var currentPairingCode: PairingCodeInfo? = null
     private var pendingRequestId: String? = null
@@ -92,7 +112,8 @@ class RealEngine(
     private fun startRequestPolling() {
         pollJob?.cancel(); pollJob = null
         pollJob = scope.launch {
-            while (provider.state.value is ProviderState.Advertising) {
+            var waitedMs = 0L
+            while (provider.state.value is ProviderState.Advertising && waitedMs < PairingCode.TTL_MS + 30_000) {
                 try {
                     val rows = controlClient.rpcArray("hmx_pending_requests")
                     if (rows.isNotEmpty()) {
@@ -106,8 +127,11 @@ class RealEngine(
                         )
                         return@launch
                     }
-                } catch (_: Exception) { }
-                delay(2500)
+                } catch (e: Exception) { HmxLog.w("Pairing") { "poll error: ${e.message}" } }
+                delay(2500); waitedMs += 2500
+            }
+            if (provider.state.value is ProviderState.Advertising && waitedMs >= PairingCode.TTL_MS + 30_000) {
+                provider.fail(AppError.TIMEOUT)
             }
         }
     }
@@ -156,7 +180,7 @@ class RealEngine(
     fun regenerateCode() {
         val old = currentPairingSessionId
         scope.launch {
-            try { old?.let { controlClient.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } } catch (_: Exception) {}
+            try { old?.let { controlClient.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } } catch (e: Exception) { HmxLog.w("Share") { "old session cancel failed: ${e.message}" } }
             val code = newPairingCode()
             try {
                 val row = controlClient.rpc("hmx_create_pairing_session",
@@ -322,7 +346,7 @@ class RealEngine(
                         endReason = s.str("end_reason")?.let { runCatching { EndReason.valueOf(it.uppercase()) }.getOrNull() },
                     )
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) { HmxLog.w("Control") { "refreshLists failed: ${e.message}" } }
         }
     }
 

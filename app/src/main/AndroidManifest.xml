@@ -34,5 +34,8 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+            <service
+            android:name="hmx.service.HmxSessionService"
+            android:exported="false" />
     </application>
 </manifest>
