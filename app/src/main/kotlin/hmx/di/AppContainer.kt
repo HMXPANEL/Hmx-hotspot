@@ -27,13 +27,8 @@ class AppContainer(context: Context) {
     val engine = RealEngine(
         scope = appScope,
         identityManager = identityManager,
-        client = controlClient,
-        manualEndpoint = {
-            runCatching {
-                androidx.datastore.preferences.core.edit
-                ""
-            }.getOrDefault("")
-        },
+        controlClient = controlClient,
+        manualEndpoint = { settingsRepository.cachedManualEndpoint },
     )
 
     fun initEngine(context: Context) {

@@ -24,7 +24,7 @@ object GatewayEngineHost {
         check(gw == null) { "gateway already running" }
         val cfg = hmxgateway.Config()
         cfg.privateKeyHex = privateKeyHex
-        cfg.listenPort = listenPort
+        cfg.listenPort = listenPort.toLong()
         cfg.innerIPv4 = ownInnerIp
         cfg.dnsUpstream = dnsUpstream
         cfg.mtu = 1280

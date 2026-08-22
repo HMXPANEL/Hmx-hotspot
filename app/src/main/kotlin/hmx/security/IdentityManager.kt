@@ -47,11 +47,11 @@ class IdentityManager(private val context: Context, private val client: ControlC
         }
 
         val secret = randomHex(32)
-        val keyPair = KeyPair(Key.generatePrivateKey())
-        val privHex = keyPair.privateKey.toBase64().let { b64 ->
-            java.util.Base64.getDecoder().decode(b64).joinToString("") { "%02x".format(it) }
-        }
-        val pubkeyB64 = keyPair.publicKey.toBase64()
+        // Real WireGuard keypair via the gateway-native AAR (wireguard-go keygen).
+        val kp = hmxgateway.Hmxgateway.generateKeyPair()!!
+        val privHex = kp.privHex
+        val pubB64 = java.util.Base64.getEncoder()
+            .encodeToString(kp.pubHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray())
         val name = nameOverride ?: "HMX ${android.os.Build.MODEL}".take(40)
 
         val deviceId = client.register(name, pubkeyB64, secret)

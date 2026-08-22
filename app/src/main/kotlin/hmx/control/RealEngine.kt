@@ -33,11 +33,11 @@ import java.util.UUID
 class RealEngine(
     private val scope: CoroutineScope,
     val identityManager: IdentityManager,
-    private val client: ControlClient,
+    controlClient: ControlClient,
     private val manualEndpoint: () -> String?,
 ) {
     val provider = ProviderMachine()
-    val clientMachine = ClientMachine()
+    val client = ClientMachine()
 
     private val _sessions = MutableStateFlow<List<Session>>(emptyList())
     val sessions: StateFlow<List<Session>> = _sessions.asStateFlow()
@@ -71,7 +71,7 @@ class RealEngine(
             provider.prepare()
             val code = newPairingCode()
             try {
-                val row = client.rpc("hmx_create_pairing_session",
+                val row = controlClient.rpc("hmx_create_pairing_session",
                     mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to "300"))
                 currentPairingSessionId = row.str("id")
                 currentPairingCode = code
@@ -86,7 +86,7 @@ class RealEngine(
         pollJob = scope.launch {
             while (provider.state.value is ProviderState.Advertising) {
                 try {
-                    val rows = client.rpcArray("hmx_pending_requests")
+                    val rows = controlClient.rpcArray("hmx_pending_requests")
                     if (rows.isNotEmpty()) {
                         val r = rows.first()
                         pendingRequestId = r.str("request_id")
@@ -108,13 +108,13 @@ class RealEngine(
         val reqId = pendingRequestId ?: return
         scope.launch {
             try {
-                val res = client.rpc("hmx_respond_request",
+                val res = controlClient.rpc("hmx_respond_request",
                     mapOf("p_request_id" to reqId, "p_approve" to "true"))
                 if (res.str("status") != "approved") { provider.rejectPeer(); return@launch }
                 val octet = res.str("net_octet")
                 val peerId = res.str("peer_id")!!
                 val name = res.str("provider_name") ?: ""
-                val sess = client.rpc("hmx_start_tunnel_session",
+                val sess = controlClient.rpc("hmx_start_tunnel_session",
                     mapOf("p_peer_id" to peerId, "p_mode" to "direct"))
                 openTunnelSessionId = sess.str("id")
 
@@ -133,7 +133,7 @@ class RealEngine(
     fun rejectPeer() {
         val reqId = pendingRequestId ?: return
         scope.launch {
-            try { client.rpc("hmx_respond_request", mapOf("p_request_id" to reqId, "p_approve" to "false")) } catch (_: Exception) {}
+            try { controlClient.rpc("hmx_respond_request", mapOf("p_request_id" to reqId, "p_approve" to "false")) } catch (_: Exception) {}
             provider.rejectPeer()
             startRequestPolling()
         }
@@ -142,10 +142,10 @@ class RealEngine(
     fun regenerateCode() {
         val old = currentPairingSessionId
         scope.launch {
-            try { old?.let { client.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } } catch (_: Exception) {}
+            try { old?.let { controlClient.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } } catch (_: Exception) {}
             val code = newPairingCode()
             try {
-                val row = client.rpc("hmx_create_pairing_session",
+                val row = controlClient.rpc("hmx_create_pairing_session",
                     mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to "300"))
                 currentPairingSessionId = row.str("id")
                 currentPairingCode = code
@@ -159,8 +159,8 @@ class RealEngine(
         pollJob?.cancel(); statsJob?.cancel()
         GatewayEngineHost.stop()
         scope.launch {
-            openTunnelSessionId?.let { runCatching { client.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to it, "p_reason" to "user")) } }
-            currentPairingSessionId?.let { runCatching { client.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } }
+            openTunnelSessionId?.let { runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to it, "p_reason" to "user")) } }
+            currentPairingSessionId?.let { runCatching { controlClient.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } }
             provider.stop()
         }
     }
@@ -168,15 +168,15 @@ class RealEngine(
     // ---------- user side ----------
     fun connectWithCode(codeInput: String?) {
         scope.launch {
-            try { identityManager.ensure() } catch (e: Exception) { clientMachine.fail(AppError.NO_INTERNET); return@launch }
-            clientMachine.scanStarted()
+            try { identityManager.ensure() } catch (e: Exception) { client.fail(AppError.NO_INTERNET); return@launch }
+            client.scanStarted()
             delay(300)
             try {
-                val res = client.rpc("hmx_claim_session", mapOf("p_code_hash" to pairingHash(codeInput ?: "")))
+                val res = controlClient.rpc("hmx_claim_session", mapOf("p_code_hash" to pairingHash(codeInput ?: "")))
                 claimedSessionId = res.str("request_id")
-                clientMachine.deviceFound(res.str("provider_name") ?: "?", res.str("provider_pubkey_prefix") ?: "????????")
+                client.deviceFound(res.str("provider_name") ?: "?", res.str("provider_pubkey_prefix") ?: "????????")
                 startStatusPolling()
-            } catch (e: Exception) { clientMachine.fail(mapRpcError(e)) }
+            } catch (e: Exception) { client.fail(mapRpcError(e)) }
         }
     }
 
@@ -184,33 +184,33 @@ class RealEngine(
         scope.launch {
             val sid = claimedSessionId ?: return@launch
             var ticks = 0
-            while (clientMachine.state.value is ClientState.Scanning ||
-                   clientMachine.state.value is ClientState.DeviceFound) {
+            while (client.state.value is ClientState.Scanning ||
+                   client.state.value is ClientState.DeviceFound) {
                 delay(2000); ticks++
-                if (ticks > 150) { clientMachine.fail(AppError.TIMEOUT); return@launch }
+                if (ticks > 150) { client.fail(AppError.TIMEOUT); return@launch }
                 try {
-                    val st = client.rpc("hmx_request_status", mapOf("p_session_id" to sid))
+                    val st = controlClient.rpc("hmx_request_status", mapOf("p_session_id" to sid))
                     when (st.str("status")) {
                         "pending" -> continue
                         "approved" -> {
                             approved = st.toMap().mapValues { it.value.toString() }
-                            clientMachine.vpnPermissionNeeded()
+                            client.vpnPermissionNeeded()
                             return@launch
                         }
-                        "rejected" -> { clientMachine.fail(AppError.PAIRING_REJECTED); return@launch }
+                        "rejected" -> { client.fail(AppError.PAIRING_REJECTED); return@launch }
                     }
-                } catch (e: Exception) { clientMachine.fail(mapRpcError(e)); return@launch }
+                } catch (e: Exception) { client.fail(mapRpcError(e)); return@launch }
             }
         }
     }
 
-    fun grantVpnPermission() { clientMachine.vpnGranted() }
-    fun denyVpnPermission() { clientMachine.vpnDenied() }
+    fun grantVpnPermission() { client.vpnGranted() }
+    fun denyVpnPermission() { client.vpnDenied() }
 
     fun confirmConnect() {
         scope.launch {
-            val ap = approved ?: run { clientMachine.fail(AppError.UNKNOWN); return@launch }
-            clientMachine.tunnelStarting()
+            val ap = approved ?: run { client.fail(AppError.UNKNOWN); return@launch }
+            client.tunnelStarting()
             TunnelController.init(context())
             val endpoint = manualEndpoint()?.takeIf { it.isNotBlank() }
             val cfg = hmx.vpn.WgPeerConfig(
@@ -222,20 +222,20 @@ class RealEngine(
             )
             val up = TunnelController.up(context(), cfg)
             if (up.isFailure) {
-                clientMachine.fail(if (endpoint == null) AppError.HANDSHAKE_FAILED else AppError.TUNNEL_FAILED)
+                client.fail(if (endpoint == null) AppError.HANDSHAKE_FAILED else AppError.TUNNEL_FAILED)
                 return@launch
             }
-            clientMachine.probeStarted()
+            client.probeStarted()
             val hs = awaitHandshake(20_000)
             if (hs == null) {
-                clientMachine.fail(AppError.HANDSHAKE_FAILED)
+                client.fail(AppError.HANDSHAKE_FAILED)
                 return@launch
             }
             try {
-                val s = client.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to "direct"))
+                val s = controlClient.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to "direct"))
                 openTunnelSessionId = s.str("id")
             } catch (_: Exception) { }
-            clientMachine.connected(ap["provider_name"] ?: "provider", ConnectionMode.DIRECT)
+            client.connected(ap["provider_name"] ?: "provider", ConnectionMode.DIRECT)
             startClientStats()
         }
     }
@@ -252,9 +252,9 @@ class RealEngine(
     private fun startClientStats() {
         statsJob?.cancel()
         statsJob = scope.launch {
-            while (clientMachine.state.value is ClientState.Connected || clientMachine.state.value is ClientState.Reconnecting) {
+            while (client.state.value is ClientState.Connected || client.state.value is ClientState.Reconnecting) {
                 delay(1000)
-                TunnelController.rxTxBytes()?.let { (rx, tx) -> clientMachine.updateStats(TrafficStats(rx, tx)) }
+                TunnelController.rxTxBytes()?.let { (rx, tx) -> client.updateStats(TrafficStats(rx, tx)) }
             }
         }
     }
@@ -263,21 +263,21 @@ class RealEngine(
         statsJob?.cancel()
         scope.launch {
             TunnelController.down()
-            openTunnelSessionId?.let { runCatching { client.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to it, "p_reason" to "user")) } }
+            openTunnelSessionId?.let { runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to it, "p_reason" to "user")) } }
             openTunnelSessionId = null
-            clientMachine.disconnect()
+            client.disconnect()
         }
     }
 
     fun acknowledgeError() {
-        if (clientMachine.state.value is ClientState.Failed) clientMachine.reset()
+        if (client.state.value is ClientState.Failed) client.reset()
         if (provider.state.value is ProviderState.Failed) provider.reset()
     }
 
     fun refreshLists() {
         scope.launch {
             try {
-                _devices.value = client.rpcArray("hmx_my_peers").map { p ->
+                _devices.value = controlClient.rpcArray("hmx_my_peers").map { p ->
                     Device(
                         id = p.str("peer_id") ?: UUID.randomUUID().toString(),
                         name = p.str("other_name") ?: "device",
@@ -287,7 +287,7 @@ class RealEngine(
                         networkType = NetworkType.UNKNOWN,
                     )
                 }
-                _sessions.value = client.rpcArray("hmx_list_sessions").map { s ->
+                _sessions.value = controlClient.rpcArray("hmx_list_sessions").map { s ->
                     Session(
                         id = s.str("id") ?: "", peerName = s.str("other_name") ?: "",
                         role = if (s.str("my_role") == "provider") DeviceRole.PROVIDER else DeviceRole.USER,
@@ -324,7 +324,7 @@ class RealEngine(
 
     fun revokePeerById(peerId: String) {
         scope.launch {
-            try { client.rpc("hmx_revoke_peer", mapOf("p_peer_id" to peerId)); refreshLists() } catch (_: Exception) {}
+            try { controlClient.rpc("hmx_revoke_peer", mapOf("p_peer_id" to peerId)); refreshLists() } catch (_: Exception) {}
         }
     }
 }
