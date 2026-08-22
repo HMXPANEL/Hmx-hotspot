@@ -351,7 +351,7 @@ class RealEngine(
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
         try { conn.responseCode == 204 || conn.responseCode == 200 } finally { conn.disconnect() }
-    }.onFailure { HmxLog.w("Network", it) { "probe error" } }.getOrDefault(false)
+    }.onFailure { HmxLog.w("Network") { "probe error: ${it.message}" } }.getOrDefault(false)
 
     private fun pairingHash(code: String): String = hmx.data.control.ControlClient.sha256Hex(code)
 
