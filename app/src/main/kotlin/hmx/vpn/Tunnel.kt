@@ -83,7 +83,7 @@ object TunnelController {
     fun lastHandshakeMs(): Long? {
         val t = activeTunnel ?: return null
         val b = backend ?: return null
-        val stats = b.statistics
+        val stats = b.getStatistics(t)
         val key = stats.peers.firstOrNull() ?: return null
         val ms = stats.peer(key)?.latestHandshake?.time ?: 0L
         return if (ms > 0) ms else null
@@ -91,7 +91,7 @@ object TunnelController {
 
     fun rxTxBytes(): Pair<Long, Long>? {
         val t = activeTunnel ?: return null
-        val stats = backend?.statistics ?: return null
+        val stats = backend?.getStatistics(t) ?: return null
         val key = stats.peers.firstOrNull() ?: return null
         val st = stats.peer(key) ?: return null
         return (st.totalRx to st.totalTx)

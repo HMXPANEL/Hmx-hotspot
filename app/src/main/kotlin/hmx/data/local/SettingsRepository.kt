@@ -9,14 +9,18 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import hmx.domain.model.HmxSettings
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
+
+
+val MANUAL_ENDPOINT = stringPreferencesKey("manual_endpoint")
 
 private val Context.hmxDataStore by preferencesDataStore(name = "hmx_settings")
 
 class SettingsRepository(private val context: Context) {
 
     @Volatile var cachedManualEndpoint: String? = null
+        private set
 
     private object Keys {
         val DEVICE_NAME = stringPreferencesKey("device_name")
@@ -50,14 +54,13 @@ class SettingsRepository(private val context: Context) {
         if (role == null) prefs.remove(Keys.DESIRED_ROLE) else prefs[Keys.DESIRED_ROLE] = role
     }
 
-    init {
-        cachedManualEndpoint = runCatching {
-            runBlocking { context.hmxDataStore.data.first()[MANUAL_ENDPOINT] }
-        }.getOrNull()
-    }
+    suspend fun loadManualEndpoint(): String? = context.hmxDataStore.data.map { it[MANUAL_ENDPOINT] }
+        .let { flow -> kotlinx.coroutines.flow.first(flow) }
 
-    suspend fun setManualEndpoint(value: String?) = edit { prefs ->
-        if (value.isNullOrBlank()) prefs.remove(MANUAL_ENDPOINT) else prefs[MANUAL_ENDPOINT] = value
+    suspend fun setManualEndpoint(value: String?) {
+        context.hmxDataStore.edit { prefs ->
+            if (value.isNullOrBlank()) prefs.remove(MANUAL_ENDPOINT) else prefs[MANUAL_ENDPOINT] = value
+        }
         cachedManualEndpoint = value?.takeIf { it.isNotBlank() }
     }
 

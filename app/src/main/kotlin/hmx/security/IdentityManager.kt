@@ -31,14 +31,15 @@ class IdentityManager(private val context: Context, private val client: ControlC
 
         val storedId = vault.get("device_id")?.decodeToString()
         val storedSecret = vault.get("device_secret")?.decodeToString()
+        val storedPub = vault.get("wg_public_key_b64")?.decodeToString()
         val storedPriv = vault.get("wg_private_key_hex")?.decodeToString()
 
-        if (storedId != null && storedSecret != null && storedPriv != null) {
+        if (storedId != null && storedSecret != null && storedPriv != null && storedPub != null) {
             val id = Identity(
                 deviceId = storedId,
                 name = vault.get("device_name")?.decodeToString() ?: "HMX device",
                 wgPrivateKeyHex = storedPriv,
-                wgPublicKeyBase64 = pubFromPrivate(storedPriv),
+                wgPublicKeyBase64 = storedPub,
                 secret = storedSecret,
             )
             client.credentialsProvider = { id.deviceId to id.secret }
@@ -58,6 +59,7 @@ class IdentityManager(private val context: Context, private val client: ControlC
         vault.put("device_id", deviceId.encodeToByteArray())
         vault.put("device_secret", secret.encodeToByteArray())
         vault.put("wg_private_key_hex", privHex.encodeToByteArray())
+        vault.put("wg_public_key_b64", pubB64.encodeToByteArray())
         vault.put("device_name", name.encodeToByteArray())
 
         val id = Identity(deviceId, name, privHex, pubkeyB64, secret)
@@ -68,11 +70,6 @@ class IdentityManager(private val context: Context, private val client: ControlC
 
     fun fingerprintPrefix(): String? =
         _identity.value?.wgPublicKeyBase64?.take(8)
-
-    private fun pubFromPrivate(privHex: String): String {
-        val bytes = privHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        return KeyPair(Key(bytes)).publicKey.toBase64()
-    }
 
     companion object {
         fun randomHex(bytes: Int): String {
