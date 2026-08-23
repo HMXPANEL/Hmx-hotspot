@@ -25,6 +25,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import hmx.core.logging.HmxLog
 import hmx.vpn.TunnelController
 import hmx.di.rememberEngine
 import hmx.domain.logic.ClientState
@@ -63,7 +64,14 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
         Spacer(Modifier.height(26.dp))
         PrimaryButton("Open Android VPN dialog", {
             runCatching { TunnelController.init(context) }
-            val intent = kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
+            val intent = try {
+                kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
+            } catch (e: Exception) {
+                HmxLog.e("VPN") { "prepareIntent failed: ${e.message}" }
+                engine.denyVpnPermission()
+                onDenied()
+                return@VpnPermissionScreen
+            }
             if (intent == null) {
                 // already granted
                 engine.grantVpnPermission()
