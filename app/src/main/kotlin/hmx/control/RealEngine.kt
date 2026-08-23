@@ -172,7 +172,7 @@ class RealEngine(
                 )
                 if (gwOk.isFailure) {
                     HmxLog.e("Gateway") { "GATEWAY_START_FAILED — aborting approval" }
-                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to sess.str("id"), "p_reason" to "gateway_start_failed")) }
+                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to sess.str("id").orEmpty(), "p_reason" to "gateway_start_failed")) }
                     openTunnelSessionId = null
                     provider.fail(AppError.TUNNEL_FAILED)
                     return@launch
@@ -480,7 +480,7 @@ class RealEngine(
         }
     }
 
-    fun currentDataLimit(): Long = hardLimitBytes()
+    suspend fun currentDataLimit(): Long = hardLimitBytes()
 
     fun revokePeerById(peerId: String) {
         scope.launch {
