@@ -105,7 +105,7 @@ func TestAllocationAndBidirectionalForwarding(t *testing.T) {
 	}
 
 	// provider -> relay -> consumer
-	provListen.WriteToUDP([]byte("wg-reply"), user.RemoteAddr())
+	provListen.WriteToUDP([]byte("wg-reply"), user.RemoteAddr().(*net.UDPAddr))
 	got = recvWithTimeout(t, user)
 	if !bytes.Equal(got, []byte("wg-reply")) {
 		t.Fatalf("consumer got %q", got)
