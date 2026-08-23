@@ -101,8 +101,11 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 		}
 		// The registration alone does not carry the target; target arrives with
 		// the session's first data packet path via ALLOC payload below.
+		// Always ack a well-formed registration, whether the session already
+		// exists or becomes pending until its ALLOC line arrives.
+		defer r.conn.WriteToUDP([]byte("HMXRELAY_OK"), from)
 		if _, ok := r.sessions[tok]; ok {
-			r.conn.WriteToUDP([]byte("HMXRELAY_OK"), from)
+			return
 		} else {
 			// Unknown token: store pending until the ALLOC line completes it.
 			// Consumer address is NOT bound here; it is adopted from the first
