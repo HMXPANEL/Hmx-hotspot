@@ -148,7 +148,8 @@ object StunClient {
             val type = ((msg[off].toInt() and 0xFF) shl 8) or (msg[off + 1].toInt() and 0xFF)
             val size = ((msg[off + 2].toInt() and 0xFF) shl 8) or (msg[off + 3].toInt() and 0xFF)
             if (type == XOR_MAPPED_ADDRESS && size >= 8) {
-                val raw = ((msg[off + 4].toInt() and 0xFF) shl 8) or (msg[off + 5].toInt() and 0xFF)
+                // value = [reserved, family, xorPort(2), xorIp(4)]
+                val raw = ((msg[off + 6].toInt() and 0xFF) shl 8) or (msg[off + 7].toInt() and 0xFF)
                 val port = (raw xor (MAGIC_COOKIE shr 16)) and 0xFFFF
                 val b = ByteArray(4)
                 for (i in 0 until 4) {
