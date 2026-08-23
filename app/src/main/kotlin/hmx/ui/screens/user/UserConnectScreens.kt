@@ -63,23 +63,7 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
         )
         Spacer(Modifier.height(26.dp))
         PrimaryButton("Open Android VPN dialog", {
-            runCatching { TunnelController.init(context) }
-            val intent: Intent?
-            try {
-                intent = kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
-            } catch (e: Exception) {
-                HmxLog.e("VPN") { "prepareIntent failed: ${e.message}" }
-                engine.denyVpnPermission()
-                onDenied()
-                return@VpnPermissionScreen
-            }
-            if (intent == null) {
-                // already granted
-                engine.grantVpnPermission()
-                onProceed()
-            } else {
-                launcher.launch(intent)
-            }
+            openVpnPermissionDialog()
         }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
         SecondaryButton("Not now", {
@@ -88,6 +72,28 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
         }, modifier = Modifier.fillMaxWidth())
     }
 }
+
+
+
+private fun openVpnPermissionDialog() {
+    try {
+        runCatching { TunnelController.init(context) }
+        val intent = kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
+        launcher.launch(intent)
+    } catch (e: Exception) {
+        HmxLog.e("VPN") { "prepareIntent failed: ${e.message}" }
+        engine.denyVpnPermission()
+        onDenied()
+    }
+}
+private val CONNECT_STEPS = listOf(
+    "Preparing secure connection",
+    "Verifying device",
+    "Starting VPN",
+    "Connecting",
+    "Testing internet",
+)
+
 @Composable
 fun ConnectingScreen(onConnected: () -> Unit, onError: (String) -> Unit) {
     val engine = rememberEngine()
