@@ -23,6 +23,15 @@ func localAddr(t *testing.T, r *relay) string {
 	return r.conn.LocalAddr().String()
 }
 
+func udpDial(t *testing.T, addr *net.UDPAddr) *net.UDPConn {
+	t.Helper()
+	c, err := net.DialUDP("udp", nil, addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 func recvWithTimeout(t *testing.T, c *net.UDPConn) []byte {
 	t.Helper()
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -36,7 +45,7 @@ func recvWithTimeout(t *testing.T, c *net.UDPConn) []byte {
 
 func TestRegistrationRequiresValidToken(t *testing.T) {
 	r := startTestRelay(t)
-	user, _ := net.DialUDP("udp", nil, r.conn.LocalAddr())
+	user := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
 	defer user.Close()
 
 	user.Write([]byte(regMagic + "short"))
@@ -70,7 +79,7 @@ func TestAllocationAndBidirectionalForwarding(t *testing.T) {
 
 	token := strings.Repeat("cd", 20)
 
-	user, _ := net.DialUDP("udp", nil, r.conn.LocalAddr())
+	user := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
 	defer user.Close()
 
 	// register consumer
