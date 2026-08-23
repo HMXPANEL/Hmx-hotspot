@@ -73,7 +73,6 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
             if (intent != null) {
                 launcher.launch(intent)
             }
-            }
         }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
         SecondaryButton("Not now", {
