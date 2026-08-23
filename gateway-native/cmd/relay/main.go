@@ -104,8 +104,10 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 		if _, ok := r.sessions[tok]; ok {
 			r.conn.WriteToUDP([]byte("HMXRELAY_OK"), from)
 		} else {
-			// Unknown token: store pending until ALLOC line completes it.
-			r.sessions["pending:"+tok] = &session{token: tok, lastUser: from, lastSeen: time.Now(), createdAt: time.Now()}
+			// Unknown token: store pending until the ALLOC line completes it.
+			// Consumer address is NOT bound here; it is adopted from the first
+			// data packet so bindings always match the real traffic socket.
+			r.sessions["pending:"+tok] = &session{token: tok, lastSeen: time.Now(), createdAt: time.Now()}
 		}
 		return
 	}
@@ -133,7 +135,7 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 			if len(r.sessions) >= maxSessions {
 				return
 			}
-			s = &session{token: tok, lastUser: from, lastSeen: time.Now(), createdAt: time.Now()}
+			s = &session{token: tok, lastSeen: time.Now(), createdAt: time.Now()}
 		}
 		s.target = ta
 		delete(r.sessions, "pending:"+tok)
