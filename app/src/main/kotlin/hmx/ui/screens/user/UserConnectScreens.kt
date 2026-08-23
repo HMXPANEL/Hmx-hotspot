@@ -72,6 +72,7 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
                 onDenied()
                 return@VpnPermissionScreen
             }
+            if (intent == null) return@VpnPermissionScreen
             if (intent == null) {
                 // already granted
                 engine.grantVpnPermission()
