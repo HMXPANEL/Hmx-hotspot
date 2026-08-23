@@ -101,12 +101,7 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 		}
 		// The registration alone does not carry the target; target arrives with
 		// the session's first data packet path via ALLOC payload below.
-		if s, ok := r.sessions[tok]; ok {
-			s.mu.Lock()
-			if s.lastUser == nil {
-				s.lastUser = from
-			}
-			s.mu.Unlock()
+		if _, ok := r.sessions[tok]; ok {
 			r.conn.WriteToUDP([]byte("HMXRELAY_OK"), from)
 		} else {
 			// Unknown token: store pending until ALLOC line completes it.
@@ -156,6 +151,11 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 			continue
 		}
 		s.mu.Lock()
+		// Adopt-once: the first data source after allocation becomes the
+		// consumer (token secrecy is the auth); afterwards the addr is locked.
+		if s.target != nil && s.lastUser == nil && !udpEqual(s.target, from) {
+			s.lastUser = from
+		}
 		isUser := s.lastUser != nil && udpEqual(s.lastUser, from)
 		isProv := s.target != nil && udpEqual(s.target, from)
 		if isUser || isProv {

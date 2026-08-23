@@ -168,6 +168,20 @@ class RealEngine(
                 val limit = hardLimitBytes()
                 cachedDataLimit = limit
                 HmxLog.i("Share") { "SESSION_START limit=${limit / (1024 * 1024)}MB" }
+                // Phase 6: discover public endpoint BEFORE binding the gateway port.
+                val lan = localWifiIp()
+                var pub: Pair<String, Int>? = null
+                for (srv in hmx.net.StunDefaults.servers) {
+                    pub = hmx.net.StunClient.discoverPublicEndpoint(srv, localPort = port)
+                    if (pub != null) break
+                }
+                val cands = buildList {
+                    if (lan != null) add(hmx.net.NetworkCandidate(hmx.net.CandidateType.HOST, lan, port))
+                    if (pub != null) add(hmx.net.NetworkCandidate(hmx.net.CandidateType.SERVER_REFLEXIVE, pub.first, pub.second))
+                }
+                runCatching { controlClient.rpc("hmx_set_candidates", mapOf("p_peer_id" to peerId, "p_candidates" to "[${cands.joinToString(",") { c -> c.toJson() }}]")) }
+                    .onFailure { HmxLog.w("Traversal") { "candidate publish failed" } }
+                HmxLog.i("Gateway") { "GATEWAY_START port=$port srflx=${pub?.let { "${it.first}:${it.second}" } ?: "none"}" }
                 val gwOk = GatewayEngineHost.start(
                     priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2",
                     ownInnerIp = "10.66.$octet.1",
@@ -265,51 +279,112 @@ class RealEngine(
     fun grantVpnPermission() { client.vpnGranted() }
     fun denyVpnPermission() { client.vpnDenied() }
 
+    private companion object {
+        const val DIRECT_ATTEMPT_TIMEOUT_MS = 10_000L
+        const val RELAY_TIMEOUT_MS = 15_000L
+    }
+
     fun confirmConnect() {
         scope.launch {
             val ap = approved ?: run { client.fail(AppError.UNKNOWN); return@launch }
             client.tunnelStarting()
             TunnelController.init(context())
-            val endpoint = ap["provider_endpoint"]?.takeIf { it.isNotBlank() } ?: manualEndpoint()?.takeIf { it.isNotBlank() }
-            HmxLog.i("WireGuard") { "peer config prepared (endpoint=${endpoint ?: "none"})" }
-            val cfg = hmx.vpn.WgPeerConfig(
-                privateKeyHex = identityManager.ensure().wgPrivateKeyHex,
+            val privateKeyHex = identityManager.ensure().wgPrivateKeyHex
+
+            fun baseCfg(endpoint: String?) = hmx.vpn.WgPeerConfig(
+                privateKeyHex = privateKeyHex,
                 peerPublicKeyBase64 = ap["provider_pubkey"]!!,
                 ownInnerIp = ap["user_inner_ip"]!!,
                 peerInnerIp = ap["provider_inner_ip"]!!,
                 endpoint = endpoint,
             )
-            val up = TunnelController.up(context(), cfg)
-            if (up.isFailure) {
-                client.fail(if (endpoint == null) AppError.HANDSHAKE_FAILED else AppError.TUNNEL_FAILED)
-                return@launch
-            }
-            client.probeStarted()
-            val hs = awaitHandshake(20_000)
-            if (hs == null) {
-                HmxLog.w("WireGuard") { "handshake timeout" }
-                client.fail(AppError.HANDSHAKE_FAILED)
-                return@launch
-            }
-            HmxLog.i("WireGuard") { "handshake detected" }
-            if (!probeInternet()) {
-                HmxLog.w("Network") { "connectivity verification failed" }
+            val manual = manualEndpoint()?.takeIf { it.isNotBlank() }
+
+            // Ordered: manual override > HOST > SRFLX > stored endpoint fallback > RELAY.
+            val providerCands = hmx.net.CandidateSelector.select(
+                hmx.net.NetworkCandidate.fromJsonList(ap["provider_candidates"])
+            ).map { it.endpoint() }.toMutableList()
+            manual?.let { providerCands.add(0, it) }
+            ap["provider_endpoint"]?.takeIf { it.isNotBlank() }?.let { if (it !in providerCands) providerCands.add(it) }
+
+            HmxLog.i("Share") { "DIRECT_CONNECT attempts=${providerCands.size}" }
+            for ((idx, ep) in providerCands.withIndex()) {
+                HmxLog.i("Share") { "DirectConnecting candidate=$idx" }
                 TunnelController.down()
-                client.fail(AppError.NO_INTERNET)
+                if (TunnelController.up(context(), baseCfg(ep)).isFailure) continue
+                if (awaitHandshake(DIRECT_ATTEMPT_TIMEOUT_MS) == null) { HmxLog.w("WireGuard") { "handshake timeout candidate=$idx" }; continue }
+                if (!probeInternet()) { HmxLog.w("Network") { "probe failed candidate=$idx" }; continue }
+                finishConnect(ap, baseCfg(ep), hmx.domain.model.ConnectionMode.DIRECT)
                 return@launch
             }
-            HmxLog.i("Network") { "connectivity verification passed" }
-            try {
-                val s = controlClient.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to "direct"))
-                openTunnelSessionId = s.str("id")
-            } catch (_: Exception) { }
-            lastClientCfg = cfg
-            lastProviderName = ap["provider_name"] ?: "provider"
-            HmxLog.i("Network") { "CONNECTIVITY_CHECK" }
-            client.connected(lastProviderName, ConnectionMode.DIRECT)
-            startClientStats()
+            if (manual == null && providerCands.isEmpty()) {
+                TunnelController.down()
+                if (TunnelController.up(context(), baseCfg(null)).isSuccess &&
+                    awaitHandshake(DIRECT_ATTEMPT_TIMEOUT_MS) != null && probeInternet()) {
+                    finishConnect(ap, baseCfg(null), hmx.domain.model.ConnectionMode.DIRECT)
+                    return@launch
+                }
+            }
+
+            connectViaRelay(ap, ::baseCfg)
         }
     }
+
+    private suspend fun connectViaRelay(
+        ap: Map<String, String>,
+        baseCfg: (String?) -> hmx.vpn.WgPeerConfig,
+    ) {
+        val peerId = ap["peer_id"] ?: run { client.fail(AppError.CONNECTION_LOST); return }
+        HmxLog.i("Share") { "RELAY_CONNECTING" }
+        try {
+            val rel = controlClient.rpc("hmx_allocate_relay", mapOf("p_peer_id" to peerId))
+            val token = rel.str("token")
+            val provEp = rel.str("provider_endpoint")
+            if (token == null || provEp.isNullOrBlank()) throw IllegalStateException("relay allocation incomplete")
+            val relayEp = hmx.net.TraversalConfig.relayAddress
+            java.net.DatagramSocket().use { sock ->
+                sock.soTimeout = 4000
+                val dst = java.net.InetSocketAddress(
+                    java.net.InetAddress.getByName(relayEp.substringBefore(":")),
+                    relayEp.substringAfter(":").toInt(),
+                )
+                fun roundtrip(payload: ByteArray): Boolean {
+                    sock.send(java.net.DatagramPacket(payload, payload.size, dst))
+                    val buf = ByteArray(64)
+                    val p = java.net.DatagramPacket(buf, buf.size)
+                    runCatching { sock.receive(p) }.getOrElse { return false }
+                    return String(buf, 0, p.length).startsWith("HMXRELAY_")
+                }
+                if (!roundtrip("HMXRELAY1 $token".toByteArray())) throw IllegalStateException("relay register failed")
+                if (!roundtrip("HMXALLOC $token $provEp".toByteArray())) throw IllegalStateException("relay alloc failed")
+            }
+            TunnelController.down()
+            if (TunnelController.up(context(), baseCfg(relayEp)).isFailure) throw IllegalStateException("tunnel up failed")
+            if (awaitHandshake(RELAY_TIMEOUT_MS) == null) throw IllegalStateException("handshake via relay timeout")
+            if (!probeInternet()) throw IllegalStateException("probe via relay failed")
+            HmxLog.i("Share") { "RELAY_CONNECTED" }
+            finishConnect(ap, baseCfg(relayEp), hmx.domain.model.ConnectionMode.RELAY)
+        } catch (e: Exception) {
+            HmxLog.w("Share") { "relay failed: ${e.message}" }
+            client.fail(AppError.PROVIDER_OFFLINE)
+        }
+    }
+
+    private suspend fun finishConnect(
+        ap: Map<String, String>,
+        cfg: hmx.vpn.WgPeerConfig,
+        mode: hmx.domain.model.ConnectionMode,
+    ) {
+        lastClientCfg = cfg
+        lastProviderName = ap["provider_name"] ?: "provider"
+        HmxLog.i("Network") { "CONNECTIVITY_CHECK mode=$mode" }
+        try {
+            controlClient.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to mode.name.lowercase()))
+        } catch (_: Exception) {}
+        client.connected(lastProviderName, mode)
+        startClientStats()
+    }
+
 
     private suspend fun awaitHandshake(timeoutMs: Long): Long? {
         val deadline = System.currentTimeMillis() + timeoutMs
