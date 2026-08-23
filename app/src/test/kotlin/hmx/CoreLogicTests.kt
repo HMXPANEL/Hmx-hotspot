@@ -1,5 +1,7 @@
 package hmx
 
+import kotlin.test.assertFailsWith
+
 import hmx.core.logging.HmxLog
 import hmx.domain.logic.DataLimits
 import hmx.domain.logic.LimitStatus
