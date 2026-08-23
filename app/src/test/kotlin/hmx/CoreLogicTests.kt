@@ -95,3 +95,13 @@ class DataLimitsTest {
         assertEquals("1.00 GB", DataLimits.formatBytes(1L shl 30))
     }
 }
+
+    @Test
+    fun retryPolicyBoundedAndExponential() {
+        val r = hmx.domain.logic.RetryPolicy(maxAttempts = 3)
+        assertEquals(2000L, r.backoffMs(1))
+        assertEquals(4000L, r.backoffMs(2))
+        assertEquals(8000L, r.backoffMs(3))
+        assertFailsWith<IllegalArgumentException> { r.backoffMs(4) } // bounded: no attempt beyond max
+        assertFailsWith<IllegalArgumentException> { hmx.domain.logic.RetryPolicy(maxAttempts = 0) }
+    }

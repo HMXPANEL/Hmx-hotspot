@@ -37,7 +37,13 @@ class RealEngine(
     val identityManager: IdentityManager,
     private val controlClient: ControlClient,
     private val manualEndpoint: () -> String?,
+    private val hardLimitBytes: () -> Long = { 0L },
 ) {
+    /** Bounded retry policy for automatic recovery (Phase 5). */
+    private val retry = hmx.domain.logic.RetryPolicy(maxAttempts = 3)
+    private var lastClientCfg: hmx.vpn.WgPeerConfig? = null
+    private var lastProviderName: String = "provider"
+    private var netCallback: Any? = null
     val provider = ProviderMachine()
     val client = ClientMachine()
 
@@ -100,7 +106,7 @@ class RealEngine(
             val code = newPairingCode()
             try {
                 val row = controlClient.rpc("hmx_create_pairing_session",
-                    mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to "300"))
+                    mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to 300))
                 currentPairingSessionId = row.str("id")
                 currentPairingCode = code
                 provider.startAdvertising(code)
@@ -158,9 +164,20 @@ class RealEngine(
                 runCatching { controlClient.rpc("hmx_set_peer_endpoint", mapOf("p_peer_id" to peerId, "p_endpoint" to endpoint)) }
                     .onFailure { HmxLog.w("Pairing") { "endpoint publish failed" } }
                 HmxLog.i("Gateway") { "gateway starting on $port for peer $peerId" }
-                GatewayEngineHost.start(priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2", ownInnerIp = "10.66.$octet.1")
-                    .onFailure { provider.fail(AppError.TUNNEL_FAILED) }
-
+                HmxLog.i("Gateway") { "GATEWAY_START port=$port" }
+                val gwOk = GatewayEngineHost.start(
+                    priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2",
+                    ownInnerIp = "10.66.$octet.1",
+                    hardLimitBytes = hardLimitBytes(),
+                )
+                if (gwOk.isFailure) {
+                    HmxLog.e("Gateway") { "GATEWAY_START_FAILED — aborting approval" }
+                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to sess.str("id"), "p_reason" to "gateway_start_failed")) }
+                    openTunnelSessionId = null
+                    provider.fail(AppError.TUNNEL_FAILED)
+                    return@launch
+                }
+                HmxLog.i("Gateway") { "GATEWAY_STARTED" }
                 provider.approvePeer(pendingRequesterName ?: "device")
                 startGatewayStats()
                 pollJob?.cancel()
@@ -171,7 +188,7 @@ class RealEngine(
     fun rejectPeer() {
         val reqId = pendingRequestId ?: return
         scope.launch {
-            try { controlClient.rpc("hmx_respond_request", mapOf("p_request_id" to reqId, "p_approve" to "false")) } catch (_: Exception) {}
+            try { controlClient.rpc("hmx_respond_request", mapOf("p_request_id" to reqId, "p_approve" to false)) } catch (_: Exception) {}
             provider.rejectPeer()
             startRequestPolling()
         }
@@ -184,7 +201,7 @@ class RealEngine(
             val code = newPairingCode()
             try {
                 val row = controlClient.rpc("hmx_create_pairing_session",
-                    mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to "300"))
+                    mapOf("p_code_hash" to pairingHash(code.code), "p_ttl_seconds" to 300))
                 currentPairingSessionId = row.str("id")
                 currentPairingCode = code
                 provider.refreshCode(code)
@@ -283,7 +300,10 @@ class RealEngine(
                 val s = controlClient.rpc("hmx_start_tunnel_session", mapOf("p_peer_id" to ap["peer_id"]!!, "p_mode" to "direct"))
                 openTunnelSessionId = s.str("id")
             } catch (_: Exception) { }
-            client.connected(ap["provider_name"] ?: "provider", ConnectionMode.DIRECT)
+            lastClientCfg = cfg
+            lastProviderName = ap["provider_name"] ?: "provider"
+            HmxLog.i("Network") { "CONNECTIVITY_CHECK" }
+            client.connected(lastProviderName, ConnectionMode.DIRECT)
             startClientStats()
         }
     }
@@ -305,6 +325,55 @@ class RealEngine(
                 TunnelController.rxTxBytes()?.let { (rx, tx) -> client.updateStats(TrafficStats(rx, tx)) }
             }
         }
+    }
+
+    /**
+     * Phase 5: bounded automatic recovery after tunnel loss / network change.
+     * Retries up to maxAttempts with exponential backoff; final failure surfaces CONNECTION_LOST.
+     */
+    fun recoverConnection() {
+        val cfg = lastClientCfg ?: return
+        if (client.state.value !is hmx.domain.logic.ClientState.Connected &&
+            client.state.value !is hmx.domain.logic.ClientState.Reconnecting) return
+        scope.launch {
+            HmxLog.i("Share") { "RECONNECT_START attempts=${retry.maxAttempts}" }
+            client.reconnect("network changed")
+            for (attempt in 1..retry.maxAttempts) {
+                TunnelController.down()
+                delay(retry.backoffMs(attempt))
+                val up = TunnelController.up(context(), cfg)
+                if (up.isSuccess && awaitHandshake(15_000) != null && probeInternet()) {
+                    HmxLog.i("Share") { "RECONNECT_SUCCESS attempt=$attempt" }
+                    client.recovered()
+                    startClientStats()
+                    return@launch
+                }
+                HmxLog.w("Share") { "reconnect attempt $attempt failed" }
+            }
+            HmxLog.w("Share") { "RECONNECT_FAILED" }
+            TunnelController.down()
+            client.fail(AppError.CONNECTION_LOST)
+        }
+    }
+
+    /** Phase 5: detect Android network changes; refresh endpoint-dependent state. */
+    fun registerNetworkMonitoring() {
+        if (netCallback != null) return
+        runCatching {
+            val cm = context().getSystemService(android.net.ConnectivityManager::class.java)
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    HmxLog.i("Share") { "NETWORK_CHANGED available" }
+                    recoverConnection()
+                }
+                override fun onLost(network: android.net.Network) {
+                    HmxLog.w("Share") { "NETWORK_CHANGED lost" }
+                    recoverConnection()
+                }
+            }
+            netCallback = cb
+            cm.registerDefaultNetworkCallback(cb)
+        }.onFailure { HmxLog.w("Share") { "net monitor unavailable: ${it.message}" } }
     }
 
     fun disconnect() {
@@ -398,10 +467,20 @@ class RealEngine(
         statsJob = scope.launch {
             while (provider.state.value is ProviderState.SharingConnected) {
                 delay(1000)
+                if (GatewayEngineHost.limitReached()) {
+                    HmxLog.w("Gateway") { "DATA_LIMIT_REACHED — stopping forwarding" }
+                    GatewayEngineHost.stop()
+                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to openTunnelSessionId, "p_reason" to "data_limit")) }
+                    openTunnelSessionId = null
+                    provider.fail(AppError.DATA_LIMIT_REACHED)
+                    return@launch
+                }
                 GatewayEngineHost.rxTxBytes()?.let { (rx, tx) -> provider.updateStats(TrafficStats(rx, tx)) }
             }
         }
     }
+
+    fun currentDataLimit(): Long = hardLimitBytes()
 
     fun revokePeerById(peerId: String) {
         scope.launch {

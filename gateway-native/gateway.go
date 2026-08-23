@@ -328,5 +328,6 @@ func (g *Gateway) udpPump(inner *gonet.UDPConn, host *net.UDPConn) {
 		}
 	}()
 	<-done
-	g.untrack(inner)
+	// Cleanup is owned solely by the outer goroutine's defer; calling untrack here
+	// too double-closed the conn and decremented the flow counter twice.
 }

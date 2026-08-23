@@ -85,6 +85,16 @@ enum class AppError(
         "HMX restarted after an interruption and restored your previous session state.",
         "Continue",
     ),
+    DATA_LIMIT_REACHED(
+        "Data limit reached",
+        "The sharing session used its configured data allowance. Forwarding stopped.",
+        "Start again",
+    ),
+    CONNECTION_LOST(
+        "Connection lost",
+        "The tunnel dropped and automatic reconnection did not succeed.",
+        "Retry",
+    ),
     UNKNOWN(
         "Something went wrong",
         "An unexpected error occurred.",

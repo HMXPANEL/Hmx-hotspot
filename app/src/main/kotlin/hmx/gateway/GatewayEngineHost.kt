@@ -18,17 +18,20 @@ object GatewayEngineHost {
         listenPort: Int,
         peerPublicKeyBase64: String,
         peerInnerIp: String,
-        ownInnerIp: String = "10.66.X.1",
+        ownInnerIp: String,
         dnsUpstream: String = "1.1.1.1:53",
+        hardLimitBytes: Long = 0L,
     ): Result<Unit> = runCatching {
-        check(gw == null) { "gateway already running" }
+        // Idempotent restart: never leave an old native instance alive.
+        gw?.let { runCatching { it.stop() } }
+        gw = null
         val cfg = hmxgateway.Config()
         cfg.privateKeyHex = privateKeyHex
         cfg.listenPort = listenPort.toLong()
         cfg.innerIPv4 = ownInnerIp
         cfg.dnsUpstream = dnsUpstream
         cfg.mtu = 1280
-        cfg.hardLimitBytes = 0L
+        cfg.hardLimitBytes = hardLimitBytes
         val gateway = hmxgateway.Hmxgateway.start(cfg)
         gateway.addPeer(b64ToHex(peerPublicKeyBase64), "$peerInnerIp/32")
         gw = gateway
@@ -44,6 +47,7 @@ object GatewayEngineHost {
     }
 
     fun rxTxBytes(): Pair<Long, Long>? = gw?.stats()?.let { it.rxBytes to it.txBytes }
+    fun limitReached(): Boolean = gw?.stats()?.limitReached ?: false
     fun isRunning(): Boolean = gw != null
 
     private fun b64ToHex(b64: String): String =

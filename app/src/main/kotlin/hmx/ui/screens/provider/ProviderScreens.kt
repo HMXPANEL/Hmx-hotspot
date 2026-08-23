@@ -230,6 +230,12 @@ fun SharingActiveScreen(onStopped: () -> Unit, onDeviceClick: (String) -> Unit) 
         }
         Spacer(Modifier.height(12.dp))
         MetricCard("Total shared", DataLimits.formatBytes(connected?.stats?.totalBytes ?: 0), Modifier.fillMaxWidth(), accent = true)
+        val limit = rememberEngine().currentDataLimit()
+        if (limit > 0) {
+            Spacer(Modifier.height(12.dp))
+            val remaining = (limit - (connected?.stats?.totalBytes ?: 0)).coerceAtLeast(0)
+            MetricCard("Remaining quota", DataLimits.formatBytes(remaining), Modifier.fillMaxWidth())
+        }
 
         Spacer(Modifier.weight(1f))
         PrimaryButton("STOP SHARING", { confirmStop = true }, modifier = Modifier.fillMaxWidth())

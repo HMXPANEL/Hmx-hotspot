@@ -29,10 +29,16 @@ class AppContainer(context: Context) {
         identityManager = identityManager,
         controlClient = controlClient,
         manualEndpoint = { settingsRepository.cachedManualEndpoint },
+        hardLimitBytes = {
+            kotlinx.coroutines.flow.firstOrNull<hmx.domain.model.HmxSettings>(
+                settingsRepository.settings
+            )?.takeIf { it.hardLimitEnabled }?.dailyLimitBytes ?: 0L
+        },
     )
 
     fun initEngine(context: Context) {
         engine.contextProvider = { context.applicationContext }
+        engine.registerNetworkMonitoring()
         hmx.vpn.TunnelController.init(context)
     }
 }
