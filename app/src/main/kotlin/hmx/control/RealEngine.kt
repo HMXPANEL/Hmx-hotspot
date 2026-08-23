@@ -37,7 +37,7 @@ class RealEngine(
     val identityManager: IdentityManager,
     private val controlClient: ControlClient,
     private val manualEndpoint: () -> String?,
-    private val hardLimitBytes: () -> Long = { 0L },
+    private val hardLimitBytes: suspend () -> Long = { 0L },
 ) {
     /** Bounded retry policy for automatic recovery (Phase 5). */
     private val retry = hmx.domain.logic.RetryPolicy(maxAttempts = 3)
@@ -470,7 +470,7 @@ class RealEngine(
                 if (GatewayEngineHost.limitReached()) {
                     HmxLog.w("Gateway") { "DATA_LIMIT_REACHED — stopping forwarding" }
                     GatewayEngineHost.stop()
-                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to openTunnelSessionId, "p_reason" to "data_limit")) }
+                    runCatching { controlClient.rpc("hmx_end_tunnel_session", mapOf("p_session_id" to openTunnelSessionId.orEmpty(), "p_reason" to "data_limit")) }
                     openTunnelSessionId = null
                     provider.fail(AppError.DATA_LIMIT_REACHED)
                     return@launch

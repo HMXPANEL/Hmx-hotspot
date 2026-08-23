@@ -5,6 +5,7 @@ import android.content.Intent
 import hmx.control.RealEngine
 import hmx.data.control.ControlClient
 import hmx.data.local.SettingsRepository
+import kotlinx.coroutines.flow.first
 import hmx.security.IdentityManager
 import hmx.security.KeystoreVault
 import hmx.security.MemoryVault
@@ -30,9 +31,8 @@ class AppContainer(context: Context) {
         controlClient = controlClient,
         manualEndpoint = { settingsRepository.cachedManualEndpoint },
         hardLimitBytes = {
-            kotlinx.coroutines.flow.firstOrNull<hmx.domain.model.HmxSettings>(
-                settingsRepository.settings
-            )?.takeIf { it.hardLimitEnabled }?.dailyLimitBytes ?: 0L
+            val s = settingsRepository.settings.first()
+            if (s.hardLimitEnabled) s.dailyLimitBytes else 0L
         },
     )
 
