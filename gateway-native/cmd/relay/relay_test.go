@@ -114,7 +114,7 @@ func TestAllocationAndBidirectionalForwarding(t *testing.T) {
 
 func TestDataRejectedWithoutAllocation(t *testing.T) {
 	r := startTestRelay(t)
-	stranger, _ := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
+	stranger := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
 	defer stranger.Close()
 	stranger.Write([]byte("random-data"))
 	time.Sleep(150 * time.Millisecond)
@@ -127,7 +127,7 @@ func TestDataRejectedWithoutAllocation(t *testing.T) {
 func TestMaxSessionsEnforced(t *testing.T) {
 	r := startTestRelay(t)
 	for i := 0; i < maxSessions+10; i++ {
-		c, _ := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
+		c := udpDial(t, r.conn.LocalAddr().(*net.UDPAddr))
 		c.Write([]byte(regMagic + strings.Repeat("aa", 12)))
 		c.Close()
 	}
