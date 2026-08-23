@@ -36,32 +36,44 @@ jobs:
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Decode release keystore
-        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+      # Personal-use signing. Priority:
+      #  1) secrets.HMX_RELEASE_STORE_B64 (stable key across builds — recommended)
+      #  2) ephemeral keystore generated in CI (uploaded as artifact; back it up
+      #     or every build gets a different signature and requires reinstall)
+      - name: Configure release keystore
         env:
           HMX_RELEASE_STORE_B64: ${{ secrets.HMX_RELEASE_STORE_B64 }}
         run: |
-          echo "$HMX_RELEASE_STORE_B64" | base64 -d > /tmp/hmx-release.jks
-          echo "HMX_RELEASE_STORE_PATH=/tmp/hmx-release.jks" >> "$GITHUB_ENV"
+          if [ -n "$HMX_RELEASE_STORE_B64" ]; then
+            echo "$HMX_RELEASE_STORE_B64" | base64 -d > /tmp/hmx-release.jks
+            echo "KEY_SOURCE=secret" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No release keystore secret configured; generating EPHEMERAL keystore."
+            keytool -genkeypair -v -keystore /tmp/hmx-release.jks -alias hmx               -keyalg RSA -keysize 2048 -validity 10000               -storepass hmx-personal-$(date +%s | tail -c5) -keypass hmx-personal-$(date +%s | tail -c5)               -dname "CN=HMX Personal, OU=Personal, O=HMX, L=Local, S=Local, C=IN"
+            echo "KEY_SOURCE=ephemeral" >> "$GITHUB_ENV"
+          fi
 
-      - name: Assemble release APK
-        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
-        env:
-          HMX_RELEASE_STORE_PASSWORD: ${{ secrets.HMX_RELEASE_STORE_PASSWORD }}
-          HMX_RELEASE_KEY_ALIAS: ${{ secrets.HMX_RELEASE_KEY_ALIAS }}
-          HMX_RELEASE_KEY_PASSWORD: ${{ secrets.HMX_RELEASE_KEY_PASSWORD }}
+      - name: Build signed personal release APK
         run: gradle :app:assembleRelease --stacktrace
 
       - name: Record release APK checksum
-        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
-        run: sha256sum app/build/outputs/apk/release/*.apk
+        run: |
+          sha256sum app/build/outputs/apk/release/*.apk
+          ls -la app/build/outputs/apk/release/
 
-      - name: Upload release APK artifact
-        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+      - name: Upload signed release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: hmx-release-apk
           path: app/build/outputs/apk/release/*.apk
+          retention-days: 90
+
+      - name: Upload ephemeral keystore for reuse
+        if: ${{ env.KEY_SOURCE == 'ephemeral' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hmx-release-keystore-EPHEMERAL-BACKUP-ME
+          path: /tmp/hmx-release.jks
           retention-days: 90
 
       - name: Upload APK artifact
