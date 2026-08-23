@@ -64,8 +64,9 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
         Spacer(Modifier.height(26.dp))
         PrimaryButton("Open Android VPN dialog", {
             runCatching { TunnelController.init(context) }
-            val intent = try {
-                kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
+            val intent: Intent?
+            try {
+                intent = kotlinx.coroutines.runBlocking { TunnelController.prepareIntent(context) }
             } catch (e: Exception) {
                 HmxLog.e("VPN") { "prepareIntent failed: ${e.message}" }
                 engine.denyVpnPermission()
