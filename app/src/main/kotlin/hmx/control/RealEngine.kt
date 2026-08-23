@@ -44,6 +44,14 @@ class RealEngine(
     private var lastClientCfg: hmx.vpn.WgPeerConfig? = null
     private var lastProviderName: String = "provider"
     private var netCallback: Any? = null
+
+    /**
+     * Phase 7: bumped whenever a session lifecycle restarts. Async continuations
+     * capture it at entry and refuse to mutate state if a newer session began
+     * (stale-callback guard).
+     */
+    @Volatile private var sessionGen: Int = 0
+    private fun nextGen(): Int = ++sessionGen
     val provider = ProviderMachine()
     val client = ClientMachine()
 
@@ -93,6 +101,7 @@ class RealEngine(
     }
 
     fun startSharing() {
+        nextGen()
         scope.launch {
             try {
                 withTimeout(45_000) { identityManager.ensure() }
@@ -212,6 +221,7 @@ class RealEngine(
     }
 
     fun regenerateCode() {
+        nextGen()
         val old = currentPairingSessionId
         scope.launch {
             try { old?.let { controlClient.rpc("hmx_cancel_session", mapOf("p_session_id" to it)) } } catch (e: Exception) { HmxLog.w("Share") { "old session cancel failed: ${e.message}" } }
@@ -228,6 +238,7 @@ class RealEngine(
     }
 
     fun stopSharing() {
+        nextGen()
         pollJob?.cancel(); statsJob?.cancel()
         GatewayEngineHost.stop()
         scope.launch {
@@ -286,6 +297,7 @@ class RealEngine(
 
     fun confirmConnect() {
         scope.launch {
+            val gen = sessionGen
             val ap = approved ?: run { client.fail(AppError.UNKNOWN); return@launch }
             client.tunnelStarting()
             TunnelController.init(context())
@@ -314,25 +326,26 @@ class RealEngine(
                 if (TunnelController.up(context(), baseCfg(ep)).isFailure) continue
                 if (awaitHandshake(DIRECT_ATTEMPT_TIMEOUT_MS) == null) { HmxLog.w("WireGuard") { "handshake timeout candidate=$idx" }; continue }
                 if (!probeInternet()) { HmxLog.w("Network") { "probe failed candidate=$idx" }; continue }
-                finishConnect(ap, baseCfg(ep), hmx.domain.model.ConnectionMode.DIRECT)
+                if (gen == sessionGen) finishConnect(ap, baseCfg(ep), hmx.domain.model.ConnectionMode.DIRECT)
                 return@launch
             }
             if (manual == null && providerCands.isEmpty()) {
                 TunnelController.down()
                 if (TunnelController.up(context(), baseCfg(null)).isSuccess &&
                     awaitHandshake(DIRECT_ATTEMPT_TIMEOUT_MS) != null && probeInternet()) {
-                    finishConnect(ap, baseCfg(null), hmx.domain.model.ConnectionMode.DIRECT)
+                    if (gen == sessionGen) finishConnect(ap, baseCfg(null), hmx.domain.model.ConnectionMode.DIRECT)
                     return@launch
                 }
             }
 
-            connectViaRelay(ap, ::baseCfg)
+            connectViaRelay(ap, ::baseCfg, gen)
         }
     }
 
     private suspend fun connectViaRelay(
         ap: Map<String, String>,
         baseCfg: (String?) -> hmx.vpn.WgPeerConfig,
+        gen: Int,
     ) {
         val peerId = ap["peer_id"] ?: run { client.fail(AppError.CONNECTION_LOST); return }
         HmxLog.i("Share") { "RELAY_CONNECTING" }
@@ -363,7 +376,7 @@ class RealEngine(
             if (awaitHandshake(RELAY_TIMEOUT_MS) == null) throw IllegalStateException("handshake via relay timeout")
             if (!probeInternet()) throw IllegalStateException("probe via relay failed")
             HmxLog.i("Share") { "RELAY_CONNECTED" }
-            finishConnect(ap, baseCfg(relayEp), hmx.domain.model.ConnectionMode.RELAY)
+            if (gen == sessionGen) finishConnect(ap, baseCfg(relayEp), hmx.domain.model.ConnectionMode.RELAY)
         } catch (e: Exception) {
             HmxLog.w("Share") { "relay failed: ${e.message}" }
             client.fail(AppError.PROVIDER_OFFLINE)

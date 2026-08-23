@@ -28,6 +28,8 @@ const (
 	defaultMTU      = 1280
 	dialTimeout     = 10 * time.Second
 	udpIdleTimeout  = 30 * time.Second
+	maxTCPConns     = 512 // resource ceiling: reject gracefully beyond this
+	maxUDPFlows     = 256
 	defaultMaxConns = 512
 	chunkSize       = 32 * 1024
 )
@@ -58,6 +60,7 @@ type Gateway struct {
 	rx, tx   atomic.Int64
 	flows    atomic.Int64
 	limitHit atomic.Bool
+	lastReject atomic.Int64
 
 	mu    sync.Mutex
 	conns map[io.Closer]struct{}
@@ -185,6 +188,16 @@ func (g *Gateway) Stop() {
 	g.dev.Close()
 }
 
+// rejectLogf logs capacity rejections at most once per 5 seconds to avoid
+// flooding the host logcat under connection floods.
+func (g *Gateway) rejectLogf(what string) {
+	if g.lastReject.Load() != 0 && time.Since(time.Unix(g.lastReject.Load(), 0)) < 5*time.Second {
+		return
+	}
+	g.lastReject.Store(time.Now().Unix())
+	log.Printf("[gateway] %s: flow limit reached, rejecting new flows", what)
+}
+
 func (g *Gateway) track(c io.Closer) {
 	g.flows.Add(1)
 	g.mu.Lock()
@@ -203,7 +216,8 @@ func (g *Gateway) untrack(c io.Closer) {
 func (g *Gateway) handleTCP(req *tcp.ForwarderRequest) {
 	id := req.ID()
 	debugLogger("fwd-tcp")("SYN %s:%d -> %s:%d", id.RemoteAddress, id.RemotePort, id.LocalAddress, id.LocalPort)
-	if g.limitHit.Load() {
+	if g.limitHit.Load() || g.flows.Load() >= maxTCPConns {
+		g.rejectLogf("tcp cap")
 		req.Complete(true)
 		return
 	}
@@ -232,7 +246,8 @@ func (g *Gateway) handleTCP(req *tcp.ForwarderRequest) {
 func (g *Gateway) handleUDP(req *udp.ForwarderRequest) {
 	id := req.ID()
 	debugLogger("fwd-udp")("flow %s:%d -> %s:%d", id.RemoteAddress, id.RemotePort, id.LocalAddress, id.LocalPort)
-	if g.limitHit.Load() {
+	if g.limitHit.Load() || g.flows.Load() >= maxUDPFlows {
+		g.rejectLogf("udp cap")
 		return
 	}
 	var wq waiter.Queue

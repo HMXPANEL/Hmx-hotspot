@@ -140,3 +140,19 @@ func TestMaxSessionsEnforced(t *testing.T) {
 		t.Fatalf("session cap exceeded: %d", total)
 	}
 }
+
+func TestPerIPRegistrationRateLimit(t *testing.T) {
+	r := startTestRelay(t)
+	allowed := 0
+	for i := 0; i < regPerIPPerMin+5; i++ {
+		if r.allowReg("10.9.9.9") {
+			allowed++
+		}
+	}
+	if allowed != regPerIPPerMin {
+		t.Fatalf("per-IP cap broken: allowed %d", allowed)
+	}
+	if r.allowReg("other-ip") != true {
+		t.Fatal("cap must be per source IP")
+	}
+}

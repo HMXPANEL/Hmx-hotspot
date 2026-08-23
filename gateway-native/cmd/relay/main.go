@@ -38,10 +38,35 @@ type session struct {
 	createdAt time.Time
 }
 
+const regPerIPPerMin = 20
+
+type ipWindow struct {
+	count int
+	start time.Time
+}
+
 type relay struct {
 	conn     *net.UDPConn
 	mu       sync.RWMutex
 	sessions map[string]*session // by token
+	regHits  map[string]*ipWindow // registration rate limiting per source IP
+}
+
+// allowReg enforces regPerIPPerMin registrations per source IP.
+func (r *relay) allowReg(ip string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w := r.regHits[ip]
+	now := time.Now()
+	if w == nil || now.Sub(w.start) > time.Minute {
+		r.regHits[ip] = &ipWindow{count: 1, start: now}
+		return true
+	}
+	if w.count >= regPerIPPerMin {
+		return false
+	}
+	w.count++
+	return true
 }
 
 func newRelay(addr string) (*relay, error) {
@@ -53,7 +78,7 @@ func newRelay(addr string) (*relay, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &relay{conn: conn, sessions: make(map[string]*session)}
+	r := &relay{conn: conn, sessions: make(map[string]*session), regHits: make(map[string]*ipWindow)}
 	go r.reaper()
 	return r, nil
 }
@@ -69,6 +94,12 @@ func (r *relay) reaper() {
 			s.mu.Unlock()
 			if idle || unclaimed {
 				delete(r.sessions, tok)
+			}
+		}
+		now2 := time.Now()
+		for ip, w := range r.regHits {
+			if now2.Sub(w.start) > 2*time.Minute {
+				delete(r.regHits, ip)
 			}
 		}
 		r.mu.Unlock()
@@ -92,7 +123,10 @@ func (r *relay) handle(buf []byte, n int, from *net.UDPAddr) {
 	if bytes.HasPrefix(payload, []byte(regMagic)) {
 		tok := strings.TrimSpace(string(payload[len(regMagic):]))
 		if !validToken(tok) {
-			return
+			return // invalid credentials are dropped silently
+		}
+		if !r.allowReg(from.IP.String()) {
+			return // registration flood from this IP
 		}
 		r.mu.Lock()
 		defer r.mu.Unlock()
