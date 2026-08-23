@@ -36,6 +36,34 @@ jobs:
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --stacktrace
 
+      - name: Decode release keystore
+        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+        env:
+          HMX_RELEASE_STORE_B64: ${{ secrets.HMX_RELEASE_STORE_B64 }}
+        run: |
+          echo "$HMX_RELEASE_STORE_B64" | base64 -d > /tmp/hmx-release.jks
+          echo "HMX_RELEASE_STORE_PATH=/tmp/hmx-release.jks" >> "$GITHUB_ENV"
+
+      - name: Assemble release APK
+        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+        env:
+          HMX_RELEASE_STORE_PASSWORD: ${{ secrets.HMX_RELEASE_STORE_PASSWORD }}
+          HMX_RELEASE_KEY_ALIAS: ${{ secrets.HMX_RELEASE_KEY_ALIAS }}
+          HMX_RELEASE_KEY_PASSWORD: ${{ secrets.HMX_RELEASE_KEY_PASSWORD }}
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Record release APK checksum
+        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+        run: sha256sum app/build/outputs/apk/release/*.apk
+
+      - name: Upload release APK artifact
+        if: ${{ env.HMX_RELEASE_STORE_B64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hmx-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 90
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

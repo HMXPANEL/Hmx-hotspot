@@ -20,15 +20,31 @@ android {
         applicationId = "hmx.remote.internet"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-phase3"
+        versionCode = 10
+        versionName = "1.0.0-rc1"
 
 
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = System.getenv("HMX_RELEASE_STORE_PATH") ?: ""
+            val storePass = System.getenv("HMX_RELEASE_STORE_PASSWORD") ?: ""
+            val keyAlias = System.getenv("HMX_RELEASE_KEY_ALIAS") ?: ""
+            val keyPass = System.getenv("HMX_RELEASE_KEY_PASSWORD") ?: ""
+            if (storePath.isNotBlank() && file(storePath).exists()) {
+                storeFile = file(storePath)
+                storePassword = storePass
+                this.keyAlias = keyAlias
+                keyPassword = keyPass
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
