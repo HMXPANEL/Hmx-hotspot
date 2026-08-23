@@ -114,7 +114,7 @@ class DataLimitsTest {
         val g = hmx.domain.logic.LifecycleGuards
         assertTrue(g.canStartSharing(hmx.domain.logic.ProviderState.Idle))
         assertFalse(g.canStartSharing(hmx.domain.logic.ProviderState.Preparing))
-        val adv = PairingCodeInfo(PairingCode.generate(), 0L, Long.MAX_VALUE)
+        val adv = hmx.security.PairingCodeInfo(PairingCode.generate(), 0L, Long.MAX_VALUE)
         assertFalse(g.canStartSharing(hmx.domain.logic.ProviderState.Advertising(adv)))
         assertTrue(g.canRegenerateCode(hmx.domain.logic.ProviderState.Advertising(adv)))
         assertFalse(g.canRegenerateCode(hmx.domain.logic.ProviderState.Idle))
