@@ -1,7 +1,5 @@
 package hmx
 
-import kotlin.test.assertFailsWith
-
 import hmx.core.logging.HmxLog
 import hmx.domain.logic.DataLimits
 import hmx.domain.logic.LimitStatus
@@ -104,6 +102,10 @@ class DataLimitsTest {
         assertEquals(2000L, r.backoffMs(1))
         assertEquals(4000L, r.backoffMs(2))
         assertEquals(8000L, r.backoffMs(3))
-        assertFailsWith<IllegalArgumentException> { r.backoffMs(4) } // bounded: no attempt beyond max
-        assertFailsWith<IllegalArgumentException> { hmx.domain.logic.RetryPolicy(maxAttempts = 0) }
+        var threw = false
+        try { r.backoffMs(4) } catch (e: IllegalArgumentException) { threw = true } // bounded
+        assertTrue(threw)
+        threw = false
+        try { hmx.domain.logic.RetryPolicy(maxAttempts = 0) } catch (e: IllegalArgumentException) { threw = true }
+        assertTrue(threw)
     }
