@@ -108,4 +108,17 @@ class DataLimitsTest {
         try { hmx.domain.logic.RetryPolicy(maxAttempts = 0) } catch (e: IllegalArgumentException) { threw = true }
         assertTrue(threw)
     }
+
+    @Test
+    fun `duplicate lifecycle starts are rejected`() {
+        val g = hmx.domain.logic.LifecycleGuards
+        assertTrue(g.canStartSharing(hmx.domain.logic.ProviderState.Idle))
+        assertFalse(g.canStartSharing(hmx.domain.logic.ProviderState.Preparing))
+        val adv = PairingCodeInfo(PairingCode.generate(), 0L, Long.MAX_VALUE)
+        assertFalse(g.canStartSharing(hmx.domain.logic.ProviderState.Advertising(adv)))
+        assertTrue(g.canRegenerateCode(hmx.domain.logic.ProviderState.Advertising(adv)))
+        assertFalse(g.canRegenerateCode(hmx.domain.logic.ProviderState.Idle))
+        assertTrue(g.canStartScan(hmx.domain.logic.ClientState.Idle))
+        assertFalse(g.canStartScan(hmx.domain.logic.ClientState.Scanning))
+    }
 }

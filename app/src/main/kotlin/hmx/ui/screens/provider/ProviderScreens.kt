@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import hmx.di.rememberEngine
 import hmx.domain.logic.DataLimits
 import hmx.domain.logic.ProviderState
-import hmx.mock.MockHmxEngine
 import hmx.security.PairingCodeInfo
 import hmx.ui.components.CodeDisplay
 import hmx.ui.components.LiveState

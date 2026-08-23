@@ -101,6 +101,10 @@ class RealEngine(
     }
 
     fun startSharing() {
+        if (!hmx.domain.logic.LifecycleGuards.canStartSharing(provider.state.value)) {
+            HmxLog.w("Share") { "startSharing ignored in ${provider.state.value::class.simpleName}" }
+            return
+        }
         nextGen()
         scope.launch {
             try {
@@ -221,6 +225,7 @@ class RealEngine(
     }
 
     fun regenerateCode() {
+        if (!hmx.domain.logic.LifecycleGuards.canRegenerateCode(provider.state.value)) return
         nextGen()
         val old = currentPairingSessionId
         scope.launch {
@@ -250,6 +255,10 @@ class RealEngine(
 
     // ---------- user side ----------
     fun connectWithCode(codeInput: String?) {
+        if (!hmx.domain.logic.LifecycleGuards.canStartScan(client.state.value)) {
+            HmxLog.w("Share") { "connectWithCode ignored in ${client.state.value::class.simpleName}" }
+            return
+        }
         scope.launch {
             try { identityManager.ensure() } catch (e: Exception) { client.fail(AppError.NO_INTERNET); return@launch }
             client.scanStarted()
@@ -424,8 +433,9 @@ class RealEngine(
      */
     fun recoverConnection() {
         val cfg = lastClientCfg ?: return
-        if (client.state.value !is hmx.domain.logic.ClientState.Connected &&
-            client.state.value !is hmx.domain.logic.ClientState.Reconnecting) return
+        // Single recovery loop at a time (network callbacks can fire in bursts).
+        if (client.state.value is hmx.domain.logic.ClientState.Reconnecting) return
+        if (client.state.value !is hmx.domain.logic.ClientState.Connected) return
         scope.launch {
             HmxLog.i("Share") { "RECONNECT_START attempts=${retry.maxAttempts}" }
             client.reconnect("network changed")
