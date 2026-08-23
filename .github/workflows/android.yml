@@ -47,10 +47,22 @@ jobs:
           if [ -n "$HMX_RELEASE_STORE_B64" ]; then
             echo "$HMX_RELEASE_STORE_B64" | base64 -d > /tmp/hmx-release.jks
             echo "KEY_SOURCE=secret" >> "$GITHUB_ENV"
+            {
+              echo "HMX_RELEASE_STORE_PASSWORD=${{ secrets.HMX_RELEASE_STORE_PASSWORD }}"
+              echo "HMX_RELEASE_KEY_ALIAS=${{ secrets.HMX_RELEASE_KEY_ALIAS }}"
+              echo "HMX_RELEASE_KEY_PASSWORD=${{ secrets.HMX_RELEASE_KEY_PASSWORD }}"
+            } >> "$GITHUB_ENV"
           else
-            echo "::warning::No release keystore secret configured; generating EPHEMERAL keystore."
-            keytool -genkeypair -v -keystore /tmp/hmx-release.jks -alias hmx               -keyalg RSA -keysize 2048 -validity 10000               -storepass hmx-personal-$(date +%s | tail -c5) -keypass hmx-personal-$(date +%s | tail -c5)               -dname "CN=HMX Personal, OU=Personal, O=HMX, L=Local, S=Local, C=IN"
-            echo "KEY_SOURCE=ephemeral" >> "$GITHUB_ENV"
+            echo "::warning::No release keystore secret configured; generating EPHEMERAL keystore (back up the artifact!)."
+            PW="hmx-$(date +%s%N | sha256sum | head -c16)"
+            keytool -genkeypair -v -keystore /tmp/hmx-release.jks -alias hmx -keyalg RSA -keysize 2048 -validity 10000 -storepass "$PW" -keypass "$PW" -dname "CN=HMX Personal, O=HMX, C=IN"
+            {
+              echo "HMX_RELEASE_STORE_PATH=/tmp/hmx-release.jks"
+              echo "HMX_RELEASE_STORE_PASSWORD=$PW"
+              echo "HMX_RELEASE_KEY_ALIAS=hmx"
+              echo "HMX_RELEASE_KEY_PASSWORD=$PW"
+              echo "KEY_SOURCE=ephemeral"
+            } >> "$GITHUB_ENV"
           fi
 
       - name: Build signed personal release APK
