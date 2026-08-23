@@ -72,7 +72,6 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
                 onDenied()
                 return@VpnPermissionScreen
             }
-            if (intent == null) return@VpnPermissionScreen
             if (intent == null) {
                 // already granted
                 engine.grantVpnPermission()
@@ -88,15 +87,6 @@ fun VpnPermissionScreen(onProceed: () -> Unit, onDenied: () -> Unit) {
         }, modifier = Modifier.fillMaxWidth())
     }
 }
-
-private val CONNECT_STEPS = listOf(
-    "Preparing secure connection",
-    "Verifying device",
-    "Starting VPN",
-    "Connecting",
-    "Testing internet",
-)
-
 @Composable
 fun ConnectingScreen(onConnected: () -> Unit, onError: (String) -> Unit) {
     val engine = rememberEngine()
