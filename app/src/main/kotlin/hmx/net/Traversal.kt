@@ -142,7 +142,7 @@ object StunClient {
     /** Parse XOR-MAPPED-ADDRESS (fallback MAPPED-ADDRESS). Testable pure function. */
     fun parseXorMappedAddress(msg: ByteArray, len: Int, txid: ByteArray): Pair<String, Int>? {
         if (len < 20) return null
-        if (((msg[0].toInt() and 0xFF) shl 8 or (msg[1].toInt() and 0xFF)) != BINDING_REQUEST + 0x0101) return null
+        if (((msg[0].toInt() and 0xFF) shl 8 or (msg[1].toInt() and 0xFF)) != 0x0101) return null
         var off = 20
         while (off + 4 <= min(len, msg.size)) {
             val type = ((msg[off].toInt() and 0xFF) shl 8) or (msg[off + 1].toInt() and 0xFF)

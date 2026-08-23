@@ -50,8 +50,9 @@ class TraversalTest {
         )
         val msg = StunClient.buildBindingRequest(txid).copyOf(20 + attr.size)
         attr.copyInto(msg, 20)
-        // response type is request + 0x0101 — patch the type field
-        msg[1] = 0x02
+        // binding success response type = 0x0101
+        msg[0] = 0x01
+        msg[1] = 0x01
 
         val parsed = StunClient.parseXorMappedAddress(msg, msg.size, txid)
         assertEquals("203.0.113.7", parsed?.first)
