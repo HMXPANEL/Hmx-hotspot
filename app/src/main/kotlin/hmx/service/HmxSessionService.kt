@@ -24,7 +24,14 @@ class HmxSessionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Session active"
-        startForeground(NOTIFY_ID, notification(text))
+        try {
+            startForeground(NOTIFY_ID, notification(text))
+        } catch (e: Exception) {
+            // Background-restricted or transient denial: degrade to no FGS instead of crashing.
+            android.util.Log.w("HMX/FGS", "startForeground denied: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         return START_NOT_STICKY
     }
 
