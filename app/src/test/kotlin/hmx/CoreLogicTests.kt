@@ -94,7 +94,6 @@ class DataLimitsTest {
         assertEquals("1.0 MB", DataLimits.formatBytes(1L shl 20))
         assertEquals("1.00 GB", DataLimits.formatBytes(1L shl 30))
     }
-}
 
     @Test
     fun retryPolicyBoundedAndExponential() {
@@ -109,3 +108,4 @@ class DataLimitsTest {
         try { hmx.domain.logic.RetryPolicy(maxAttempts = 0) } catch (e: IllegalArgumentException) { threw = true }
         assertTrue(threw)
     }
+}
