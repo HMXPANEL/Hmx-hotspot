@@ -165,10 +165,13 @@ class RealEngine(
                     .onFailure { HmxLog.w("Pairing") { "endpoint publish failed" } }
                 HmxLog.i("Gateway") { "gateway starting on $port for peer $peerId" }
                 HmxLog.i("Gateway") { "GATEWAY_START port=$port" }
+                val limit = hardLimitBytes()
+                cachedDataLimit = limit
+                HmxLog.i("Share") { "SESSION_START limit=${limit / (1024 * 1024)}MB" }
                 val gwOk = GatewayEngineHost.start(
                     priv, port, pendingRequesterPubKey ?: "", "10.66.$octet.2",
                     ownInnerIp = "10.66.$octet.1",
-                    hardLimitBytes = hardLimitBytes(),
+                    hardLimitBytes = limit,
                 )
                 if (gwOk.isFailure) {
                     HmxLog.e("Gateway") { "GATEWAY_START_FAILED — aborting approval" }
@@ -480,7 +483,10 @@ class RealEngine(
         }
     }
 
-    suspend fun currentDataLimit(): Long = hardLimitBytes()
+    @Volatile var cachedDataLimit: Long = 0L
+        private set
+
+    fun currentDataLimit(): Long = cachedDataLimit
 
     fun revokePeerById(peerId: String) {
         scope.launch {
