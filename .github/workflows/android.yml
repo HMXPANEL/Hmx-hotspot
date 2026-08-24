@@ -23,7 +23,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: false
           package-manager: apt
 
       - name: Set up Gradle
