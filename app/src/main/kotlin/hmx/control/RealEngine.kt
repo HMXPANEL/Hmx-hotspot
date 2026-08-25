@@ -307,6 +307,19 @@ class RealEngine(
     fun confirmConnect() {
         scope.launch {
             val gen = sessionGen
+            // Re-fetch latest payload so endpoint/candidates published after the
+            // initial poll are visible.  Provider may not have called
+            // hmx_set_peer_endpoint / hmx_set_candidates yet when
+            // startStatusPolling first saw status = "approved".
+            claimedSessionId?.let { sid ->
+                try {
+                    val st = controlClient.rpc("hmx_request_status", mapOf("p_session_id" to sid))
+                    if (st.str("status") == "approved") {
+                        approved = st.toMap().mapValues { it.value.toString() }
+                        HmxLog.i("Share") { "confirmConnect refreshed approved payload (endpoint=${approved!!["provider_endpoint"]})" }
+                    }
+                } catch (_: Exception) { HmxLog.w("Share") { "confirmConnect re-fetch failed, using cached approved" } }
+            }
             val ap = approved ?: run { client.fail(AppError.UNKNOWN); return@launch }
             client.tunnelStarting()
             TunnelController.init(context())
@@ -323,10 +336,10 @@ class RealEngine(
 
             // Ordered: manual override > HOST > SRFLX > stored endpoint fallback > RELAY.
             val providerCands = hmx.net.CandidateSelector.select(
-                hmx.net.NetworkCandidate.fromJsonList(ap["provider_candidates"])
+                hmx.net.NetworkCandidate.fromJsonList(ap["provider_candidates"]?.takeIf { it.isNotBlank() && it != "null" })
             ).map { it.endpoint() }.toMutableList()
             manual?.let { providerCands.add(0, it) }
-            ap["provider_endpoint"]?.takeIf { it.isNotBlank() }?.let { if (it !in providerCands) providerCands.add(it) }
+            ap["provider_endpoint"]?.takeIf { it.isNotBlank() && it != "null" }?.let { if (it !in providerCands) providerCands.add(it) }
 
             HmxLog.i("Share") { "DIRECT_CONNECT attempts=${providerCands.size}" }
             for ((idx, ep) in providerCands.withIndex()) {
