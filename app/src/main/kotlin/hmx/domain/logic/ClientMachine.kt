@@ -55,7 +55,7 @@ class ClientMachine(
 
     fun vpnPermissionNeeded() {
         when (_state.value) {
-            is ClientState.Authenticating ->
+            is ClientState.Authenticating, is ClientState.DeviceFound ->
                 _state.value = ClientState.VpnPermissionRequired
             else -> Unit
         }

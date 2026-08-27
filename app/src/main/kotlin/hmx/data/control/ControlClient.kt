@@ -169,6 +169,7 @@ fun mapRpcError(e: Throwable): AppError {
         "CONSUMED" -> AppError.PAIRING_EXPIRED
         "INVALID_CODE" -> AppError.PAIRING_EXPIRED
         "LOCKED", "TAKEN" -> AppError.PAIRING_EXPIRED
+        "NOT_FOUND" -> AppError.PAIRING_EXPIRED
         "REJECTED" -> AppError.PAIRING_REJECTED
         "SELF_PAIR" -> AppError.PAIRING_REJECTED
         "DEVICE_REVOKED", "DEVICE_UNAUTHORIZED" -> AppError.DISCONNECTED_BY_PEER
